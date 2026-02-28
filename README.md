@@ -94,5 +94,3 @@ Follow these steps to set up the project locally.
 *B.Tech – Data Science*
 
 ---
-
-*Made with ❤️ and AI.*
