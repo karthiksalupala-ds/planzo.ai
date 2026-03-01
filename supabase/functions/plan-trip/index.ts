@@ -41,6 +41,8 @@ interface TripResponse {
     title: string;
     heroImage: string;
     activities: { name: string; place: string; image: string; lat: number; lng: number }[];
+    meals: { breakfast: string; lunch: string; dinner: string };
+    tips: string;
   }[];
   packingList: string[];
   safetyTips: string[];
@@ -64,7 +66,13 @@ Return ONLY valid JSON matching this exact schema (no markdown, no explanation):
   "budgetBreakdown": { "accommodation": number, "food": number, "transport": number, "activities": number, "miscellaneous": number },
   "travelOptions": [{ "mode": "string", "from": "string", "to": "string", "estimatedCost": number, "duration": "string" }],
   "localTransport": [{ "mode": "string", "estimatedDailyCost": number, "notes": "string" }],
-  "itinerary": [{ "day": number, "title": "string", "activities": [{ "name": "string", "place": "string", "lat": number, "lng": number }] }],
+  "itinerary": [{ 
+    "day": number, 
+    "title": "string", 
+    "activities": [{ "name": "string", "place": "string", "lat": number, "lng": number }],
+    "meals": { "breakfast": "string", "lunch": "string", "dinner": "string" },
+    "tips": "string"
+  }],
   "packingList": ["string"],
   "safetyTips": ["string"],
   "bestTimeToVisit": "string",
@@ -72,19 +80,22 @@ Return ONLY valid JSON matching this exact schema (no markdown, no explanation):
 }
 Budget values must be in INR (₹). Be specific with place names and coordinates. Generate ${req.days || 3} days of itinerary for ${req.travelers || 2} travelers.`;
 
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${AI_API_KEY}`,
+      "HTTP-Referer": "https://planzo.ai",
+      "X-Title": "Planzo AI",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "llama3-70b-8192",
+      model: "meta-llama/llama-3-70b-instruct",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: req.query },
       ],
       temperature: 0.7,
+      response_format: { type: "json_object" },
     }),
   });
 
@@ -97,13 +108,28 @@ Budget values must be in INR (₹). Be specific with place names and coordinates
   const data = await response.json();
   let content = data.choices?.[0]?.message?.content || "";
 
-  // Strip markdown fences if present
-  content = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  // AI can sometimes return JSON within markdown fences or with extra text.
+  // This logic robustly extracts the JSON object.
+  const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  let jsonString = content;
+
+  if (jsonMatch && jsonMatch[1]) {
+    jsonString = jsonMatch[1];
+  }
+
+  const firstBrace = jsonString.indexOf('{');
+  const lastBrace = jsonString.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    jsonString = jsonString.substring(firstBrace, lastBrace + 1);
+  }
+
+  // Remove trailing commas which are common in LLM JSON
+  jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
 
   try {
-    return JSON.parse(content);
+    return JSON.parse(jsonString);
   } catch {
-    console.error("Failed to parse AI response:", content.substring(0, 500));
+    console.error("Failed to parse AI response:", jsonString.substring(0, 500));
     throw new Error("AI returned invalid JSON");
   }
 }
@@ -262,13 +288,18 @@ async function fetchWeather(trip: TripResponse): Promise<TripResponse> {
 
 // ─── 5. Generate Map Data ────────────────────────────────────────────
 function generateMapData(trip: TripResponse): TripResponse {
+  const GOOGLE_MAPS_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY");
+  if (!GOOGLE_MAPS_API_KEY) {
+    console.warn("GOOGLE_MAPS_API_KEY is not set. Map embed will not work correctly.");
+  }
+
   const lat = trip.map?.lat || 0;
   const lng = trip.map?.lng || 0;
 
   trip.map = {
     lat,
     lng,
-    embedUrl: `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.05},${lat - 0.05},${lng + 0.05},${lat + 0.05}&layer=mapnik&marker=${lat},${lng}`,
+    embedUrl: `https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY || ''}&q=${encodeURIComponent(trip.destination)}&zoom=11`,
   };
 
   // Ensure all activities have coordinates
@@ -300,7 +331,7 @@ serve(async (req) => {
       });
     }
 
-    const userBudget = body.budget || 15000;
+    const userBudget = Number(body.budget) || 15000;
 
     console.log(`[plan-trip] Generating trip for: "${body.query}"`);
 

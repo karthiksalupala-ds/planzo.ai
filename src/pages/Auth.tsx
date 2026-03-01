@@ -21,6 +21,10 @@ const Auth = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) return;
+    if (!isLogin && !displayName.trim()) {
+      toast({ title: "Missing Information", description: "Please enter a display name.", variant: "destructive" });
+      return;
+    }
     setLoading(true);
 
     if (isLogin) {

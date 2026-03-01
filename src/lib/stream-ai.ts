@@ -57,9 +57,9 @@ export async function streamTripPlan({
 
         if (line.endsWith("\r")) line = line.slice(0, -1);
         if (line.startsWith(":") || line.trim() === "") continue;
-        if (!line.startsWith("data: ")) continue;
+        if (!line.startsWith("data:")) continue;
 
-        const jsonStr = line.slice(6).trim();
+        const jsonStr = line.slice(5).trim();
         if (jsonStr === "[DONE]") {
           streamDone = true;
           break;
@@ -69,9 +69,8 @@ export async function streamTripPlan({
           const parsed = JSON.parse(jsonStr);
           const content = parsed.choices?.[0]?.delta?.content as string | undefined;
           if (content) onDelta(content);
-        } catch {
-          textBuffer = line + "\n" + textBuffer;
-          break;
+        } catch (e) {
+          console.warn("Skipping invalid JSON chunk", e);
         }
       }
     }
@@ -82,8 +81,8 @@ export async function streamTripPlan({
         if (!raw) continue;
         if (raw.endsWith("\r")) raw = raw.slice(0, -1);
         if (raw.startsWith(":") || raw.trim() === "") continue;
-        if (!raw.startsWith("data: ")) continue;
-        const jsonStr = raw.slice(6).trim();
+        if (!raw.startsWith("data:")) continue;
+        const jsonStr = raw.slice(5).trim();
         if (jsonStr === "[DONE]") continue;
         try {
           const parsed = JSON.parse(jsonStr);

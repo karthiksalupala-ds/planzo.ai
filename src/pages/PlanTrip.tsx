@@ -1,12 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "react-router-dom";
 import {
   Sparkles, Send, MapPin, IndianRupee, Calendar, Users, ChevronRight,
   Hotel, Utensils, Camera, Loader2, Heart, Mountain, Palmtree, Baby,
-  User, Shield, Backpack, CloudSun, AlertCircle, Save, Train, Plane,
-  Bus, Car, Navigation, TrendingUp, TrendingDown, AlertTriangle,
-  CheckCircle, XCircle
+  User, Shield, Backpack, CloudSun, AlertCircle, Save, Train, Plane, Bus,
+  Car, Navigation, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Share2, XCircle, ShoppingBag, Printer
 } from "lucide-react";
 import { streamTripPlan, parseItineraryJSON } from "@/lib/stream-ai";
 import { useToast } from "@/hooks/use-toast";
@@ -20,19 +19,6 @@ const moods = [
   { id: "family", label: "Family", icon: Baby },
   { id: "solo", label: "Solo", icon: User },
 ];
-
-// Budget tier definitions
-const budgetTiers = [
-  { id: "budget", label: "Budget", min: 800, max: 1500, desc: "Hostels, local food, public transport" },
-  { id: "moderate", label: "Moderate", min: 1500, max: 3000, desc: "Budget hotels, good restaurants" },
-  { id: "premium", label: "Premium", min: 3000, max: 5000, desc: "3-star hotels, cabs" },
-  { id: "luxury", label: "Luxury", min: 5000, max: 99999, desc: "5-star, fine dining, flights" },
-];
-
-// Calculate budget tier from amount
-const getBudgetTier = (amount: number) => {
-  return budgetTiers.find(tier => amount >= tier.min && amount <= tier.max) || budgetTiers[0];
-};
 
 const PlanTrip = () => {
   const [searchParams] = useSearchParams();
@@ -49,48 +35,9 @@ const PlanTrip = () => {
   const [budget, setBudget] = useState("15000");
   const [days, setDays] = useState("3");
   const [travelers, setTravelers] = useState("2");
-  
-  // Budget slider and live update
-  const [budgetSliderValue, setBudgetSliderValue] = useState(15000);
-  const [isLiveUpdate, setIsLiveUpdate] = useState(false);
 
   const { toast } = useToast();
   const { user } = useAuth();
-
-  // Sync slider with budget input
-  useEffect(() => {
-    const parsed = parseInt(budget);
-    if (!isNaN(parsed)) {
-      setBudgetSliderValue(parsed);
-    }
-  }, [budget]);
-
-  // Handle slider change with debounced live update
-  const handleSliderChange = useCallback((value: number) => {
-    setBudgetSliderValue(value);
-    setBudget(value.toString());
-    
-    // Auto-regenerate if plan exists and live update is enabled
-    if (plan && isLiveUpdate) {
-      debouncedRegenerate(value.toString());
-    }
-  }, [plan, isLiveUpdate]);
-
-  // Debounce function for live updates
-  let debounceTimer: NodeJS.Timeout;
-  const debouncedRegenerate = useCallback((newBudget: string) => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      if (query.trim()) {
-        regeneratePlan(query, newBudget, days, travelers, activeMood);
-      }
-    }, 1500);
-  }, [query, days, travelers, activeMood]);
-
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => clearTimeout(debounceTimer);
-  }, []);
 
   const handleSaveTrip = async () => {
     if (!user) {
@@ -117,6 +64,29 @@ const PlanTrip = () => {
     }
   };
 
+  const handleShareTrip = async () => {
+    if (!plan) return;
+    const shareData = {
+      title: `Trip to ${plan.destination}`,
+      text: `Check out this trip plan to ${plan.destination}: ${plan.summary}`,
+      url: window.location.href,
+    };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.error("Error sharing:", err);
+      }
+    } else {
+      navigator.clipboard.writeText(`${shareData.title}\n${shareData.text}\n${shareData.url}`);
+      toast({ title: "Link copied", description: "Trip details copied to clipboard." });
+    }
+  };
+
+  const handlePrintTrip = () => {
+    window.print();
+  };
+
   const regeneratePlan = async (q: string, b: string, d: string, t: string, m: string) => {
     setIsPlanning(true);
     setError("");
@@ -132,11 +102,21 @@ const PlanTrip = () => {
         setRawStream(fullText);
       },
       onDone: () => {
-        const parsed = parseItineraryJSON(fullText);
-        if (parsed) {
+        let parsed = null;
+        try {
+          // Try parsing as standard JSON first (backend now returns clean JSON)
+          parsed = JSON.parse(fullText);
+        } catch (e) {
+          console.warn("Standard JSON parse failed, attempting fallback...", e);
+          // Fallback to the stream parser if direct parsing fails
+          parsed = parseItineraryJSON(fullText);
+        }
+
+        if (parsed && !parsed.error) {
           setPlan(parsed);
         } else {
-          setError("Could not parse the AI response. Please try again.");
+          console.error("Failed to parse AI response. Raw text received:", fullText);
+          setError(parsed?.error || "Could not parse the AI response. Please try again.");
         }
         setIsPlanning(false);
       },
@@ -177,7 +157,7 @@ const PlanTrip = () => {
   return ( 
     <div className="px-5 md:container py-6 max-w-2xl mx-auto">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="font-display text-2xl font-bold text-foreground">Plan Your Trip</h1>
+        <h1 className="font-display text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600">Plan Your Trip</h1>
         <p className="text-sm text-muted-foreground mt-1">AI-powered itinerary with strict budget control</p>
       </motion.div>
 
@@ -220,7 +200,7 @@ const PlanTrip = () => {
           </div>
         </div>
 
-        {/* Quick Options with Budget Slider */}
+        {/* Quick Options */}
         <div className="grid grid-cols-3 gap-3 mt-4">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1">
@@ -260,51 +240,6 @@ const PlanTrip = () => {
           </div>
         </div>
 
-        {/* Budget Slider */}
-        <div className="mt-4 p-3 rounded-xl bg-muted/30 border border-border/50">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-              <TrendingUp className="h-3 w-3" /> Live Budget Slider
-            </span>
-            <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <input 
-                type="checkbox" 
-                checked={isLiveUpdate}
-                onChange={(e) => setIsLiveUpdate(e.target.checked)}
-                className="rounded border-border text-primary focus:ring-primary/20" 
-              />
-              Auto-regenerate
-            </label>
-          </div>
-          <input 
-            type="range" 
-            min="1000" 
-            max="100000" 
-            step="500"
-            value={budgetSliderValue}
-            onChange={(e) => handleSliderChange(parseInt(e.target.value))}
-            className="w-full h-2 rounded-full appearance-none cursor-pointer gradient-hero"
-            style={{
-              background: `linear-gradient(to right, #10b981 0%, #10b981 ${(budgetSliderValue/100000)*100}%, #e5e7eb ${(budgetSliderValue/100000)*100}%, #e5e7eb 100%)`
-            }}
-          />
-          <div className="flex justify-between mt-1">
-            <span className="text-[10px] text-muted-foreground">₹1,000</span>
-            <span className="text-xs font-bold text-primary">₹{budgetSliderValue.toLocaleString()}</span>
-            <span className="text-[10px] text-muted-foreground">₹1,00,000</span>
-          </div>
-          <div className="mt-2 text-center">
-            <span className={`px-2 py-1 rounded-full text-[10px] font-semibold ${
-              budgetSliderValue < 15000 ? "bg-emerald-500/10 text-emerald-600" :
-              budgetSliderValue < 30000 ? "bg-blue-500/10 text-blue-600" :
-              budgetSliderValue < 50000 ? "bg-purple-500/10 text-purple-600" :
-              "bg-amber-500/10 text-amber-600"
-            }`}>
-              {getBudgetTier(budgetSliderValue / (parseInt(days) || 3) / (parseInt(travelers) || 2)).label} Tier
-            </span>
-          </div>
-        </div>
-
         <button onClick={handlePlan} disabled={isPlanning || !query.trim()} className="w-full mt-4 py-3 rounded-xl gradient-hero text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
           {isPlanning ? (
             <><Loader2 className="h-4 w-4 animate-spin" />Generating with AI...</>
@@ -321,6 +256,12 @@ const PlanTrip = () => {
           <div>
             <p className="text-sm font-semibold text-destructive">Something went wrong</p>
             <p className="text-xs text-destructive/80 mt-1">{error}</p>
+            <button
+              onClick={handlePlan}
+              className="mt-2 text-xs font-semibold text-destructive underline hover:no-underline"
+            >
+              Try Again
+            </button>
           </div>
         </motion.div>
       )}
@@ -365,14 +306,30 @@ const PlanTrip = () => {
                     <h3 className="font-display font-bold text-foreground text-lg">{plan.destination}</h3>
                     <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{plan.summary}</p>
                   </div>
-                  <button
-                    onClick={handleSaveTrip}
-                    disabled={saving}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors disabled:opacity-50 flex-shrink-0"
-                  >
-                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                    Save
-                  </button>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button
+                      onClick={handlePrintTrip}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/80 transition-colors"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      Print
+                    </button>
+                    <button
+                      onClick={handleShareTrip}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/80 transition-colors"
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      Share
+                    </button>
+                    <button
+                      onClick={handleSaveTrip}
+                      disabled={saving}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors disabled:opacity-50"
+                    >
+                      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                      Save
+                    </button>
+                  </div>
                 </div>
               )}
               {plan.destinationImage && (
@@ -380,14 +337,30 @@ const PlanTrip = () => {
                   <div className="flex-1">
                     <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{plan.summary}</p>
                   </div>
-                  <button
-                    onClick={handleSaveTrip}
-                    disabled={saving}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors disabled:opacity-50 flex-shrink-0"
-                  >
-                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                    Save
-                  </button>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button
+                      onClick={handlePrintTrip}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/80 transition-colors"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      Print
+                    </button>
+                    <button
+                      onClick={handleShareTrip}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/80 transition-colors"
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      Share
+                    </button>
+                    <button
+                      onClick={handleSaveTrip}
+                      disabled={saving}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors disabled:opacity-50"
+                    >
+                      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                      Save
+                    </button>
+                  </div>
                 </div>
               )}
               {plan.weatherNote && (
@@ -397,6 +370,37 @@ const PlanTrip = () => {
                 </div>
               )}
             </div>
+
+            {/* Map Section */}
+            {plan.map && (
+              <div className="p-4 rounded-2xl bg-card shadow-card">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-display font-semibold text-foreground text-sm flex items-center gap-2">
+                    <Navigation className="h-4 w-4 text-primary" /> Location Map
+                  </h3>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${plan.map.lat},${plan.map.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                  >
+                    Open in Maps <ChevronRight className="h-3 w-3" />
+                  </a>
+                </div>
+                <div className="rounded-xl overflow-hidden border border-border/50 h-48">
+                  <iframe
+                    title="Trip Location"
+                    src={plan.map.embedUrl}
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    allowFullScreen
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Budget Health Meter */}
             {budgetInfo && (
@@ -457,33 +461,39 @@ const PlanTrip = () => {
             )}
 
             {/* Budget Breakdown */}
-            {plan.budget && (
+            {plan.budgetBreakdown && plan.budgetHealth && (
               <div className="p-4 rounded-2xl bg-card shadow-card">
                 <h3 className="font-display font-semibold text-foreground text-sm mb-3">Budget Breakdown</h3>
                 <div className="space-y-2">
                   {[
-                    { label: "Hotels", data: plan.budget.hotels, icon: Hotel },
-                    { label: "Food", data: plan.budget.food, icon: Utensils },
-                    { label: "Activities", data: plan.budget.activities, icon: Camera },
-                    { label: "Transport", data: plan.budget.transport, icon: MapPin },
-                  ].map((item) => item.data && (
-                    <div key={item.label} className="flex items-center gap-3">
-                      <item.icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <div className="flex-1">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-foreground font-medium">{item.label}</span>
-                          <span className="text-primary font-semibold">{item.data.amount}</span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                          <motion.div initial={{ width: 0 }} animate={{ width: `${item.data.pct}%` }} transition={{ delay: 0.3, duration: 0.6 }} className="h-full rounded-full gradient-hero" />
+                    { label: "Accommodation", value: plan.budgetBreakdown.accommodation, icon: Hotel },
+                    { label: "Food", value: plan.budgetBreakdown.food, icon: Utensils },
+                    { label: "Activities", value: plan.budgetBreakdown.activities, icon: Camera },
+                    { label: "Transport", value: plan.budgetBreakdown.transport, icon: MapPin },
+                    { label: "Miscellaneous", value: plan.budgetBreakdown.miscellaneous, icon: ShoppingBag },
+                  ].map((item) => {
+                    if (!item.value) return null;
+                    const total = plan.budgetHealth.totalEstimated || 1;
+                    const pct = (item.value / total) * 100;
+                    return (
+                      <div key={item.label} className="flex items-center gap-3">
+                        <item.icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1">
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-foreground font-medium">{item.label}</span>
+                            <span className="text-primary font-semibold">₹{item.value.toLocaleString()}</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                            <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ delay: 0.3, duration: 0.6 }} className="h-full rounded-full gradient-hero" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="flex justify-between items-center mt-3 pt-3 border-t border-border">
                   <span className="text-sm font-semibold text-foreground">Total Estimated</span>
-                  <span className="text-lg font-bold text-gradient-hero">{plan.budget.total}</span>
+                  <span className="text-lg font-bold text-gradient-hero">₹{(plan.budgetHealth.totalEstimated || 0).toLocaleString()}</span>
                 </div>
               </div>
             )}
@@ -496,31 +506,32 @@ const PlanTrip = () => {
                 </h3>
                 <div className="space-y-3">
                   {plan.travelOptions.map((opt: any, i: number) => {
-                    const icon = opt.mode?.toLowerCase().includes("train") ? Train
-                      : opt.mode?.toLowerCase().includes("flight") || opt.mode?.toLowerCase().includes("fly") ? Plane
-                      : opt.mode?.toLowerCase().includes("bus") ? Bus : Car;
+                    const modeLower = opt.mode?.toLowerCase() || '';
+                    const icon = modeLower.includes("train") ? Train
+                      : modeLower.includes("flight") || modeLower.includes("fly") ? Plane
+                      : modeLower.includes("bus") ? Bus : Car;
                     const Icon = icon;
-                    const isBudget = opt.type === "budget";
+                    const isBudget = modeLower.includes("bus") || modeLower.includes("train");
+                    const route = opt.from && opt.to ? `${opt.from} to ${opt.to}` : 'N/A';
                     return (
                       <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 * i }}
                         className="flex items-start gap-3 p-3 rounded-xl bg-muted/30 border border-border/50"
                       >
                         <div className={`h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isBudget ? "bg-emerald-500/10" : "bg-primary/10"}`}>
-                          <Icon className={`h-4.5 w-4.5 ${isBudget ? "text-emerald-600" : "text-primary"}`} />
+                          <Icon className={`h-5 w-5 ${isBudget ? "text-emerald-600" : "text-primary"}`} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
                             <span className="text-sm font-semibold text-foreground">{opt.mode}</span>
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${isBudget ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/10 text-primary"}`}>
-                              {isBudget ? "Budget" : "Premium"}
+                              {isBudget ? "Budget" : "Comfort"}
                             </span>
                           </div>
-                          <p className="text-xs text-muted-foreground">{opt.route}</p>
+                          <p className="text-xs text-muted-foreground">{route}</p>
                           <div className="flex items-center gap-3 mt-1.5">
-                            <span className="text-xs font-semibold text-foreground">{opt.cost}</span>
+                            <span className="text-xs font-semibold text-foreground">₹{opt.estimatedCost?.toLocaleString()}</span>
                             <span className="text-[10px] text-muted-foreground">• {opt.duration}</span>
                           </div>
-                          {opt.tips && <p className="text-[11px] text-ocean italic mt-1">💡 {opt.tips}</p>}
                         </div>
                       </motion.div>
                     );
@@ -530,32 +541,21 @@ const PlanTrip = () => {
             )}
 
             {/* Local Transport */}
-            {plan.localTransport && (
+            {plan.localTransport && plan.localTransport.length > 0 && (
               <div className="p-4 rounded-2xl bg-card shadow-card">
                 <h3 className="font-display font-semibold text-foreground text-sm flex items-center gap-2 mb-3">
                   <MapPin className="h-4 w-4 text-coral" /> Getting Around Locally
                 </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {plan.localTransport.budget && (
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 mb-2">💰 Budget</p>
-                      <div className="space-y-1.5">
-                        {plan.localTransport.budget.map((item: string, i: number) => (
-                          <p key={i} className="text-xs text-muted-foreground">{item}</p>
-                        ))}
+                <div className="space-y-3">
+                  {plan.localTransport.map((item: any, i: number) => (
+                    <div key={i} className="p-3 rounded-lg bg-muted/30">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-semibold text-foreground">{item.mode}</span>
+                        {item.estimatedDailyCost > 0 && <span className="text-xs font-bold text-primary">~₹{item.estimatedDailyCost.toLocaleString()}/day</span>}
                       </div>
+                      <p className="text-xs text-muted-foreground mt-1">{item.notes}</p>
                     </div>
-                  )}
-                  {plan.localTransport.comfort && (
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-primary mb-2">✨ Comfort</p>
-                      <div className="space-y-1.5">
-                        {plan.localTransport.comfort.map((item: string, i: number) => (
-                          <p key={i} className="text-xs text-muted-foreground">{item}</p>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  ))}
                 </div>
               </div>
             )}
@@ -613,7 +613,6 @@ const PlanTrip = () => {
                                 <span className="font-medium text-foreground">{activity.name || activity}</span>
                               </div>
                               {activity.place && <p className="text-[10px] text-muted-foreground ml-5">{activity.place}</p>}
-                              {activity.description && <p className="text-[10px] text-muted-foreground ml-5">{activity.description}</p>}
                             </div>
                           </div>
                         ) : (
@@ -624,32 +623,32 @@ const PlanTrip = () => {
                         )}
                       </div>
                     ))}
-                    
-                    {/* Legacy string activities */}
-                    {day.activities && !Array.isArray(day.activities) && (
-                      <div className="space-y-2 ml-0">
-                        {(day.activities as string[]).map((a: string, j: number) => (
-                          <div key={j} className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <ChevronRight className="h-3 w-3 text-primary flex-shrink-0" />
-                            {a}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
+
                     {/* Meals */}
                     {day.meals && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {Object.entries(day.meals).map(([meal, place]) => (
-                          <span key={meal} className="px-2.5 py-1 rounded-full bg-coral/10 text-coral text-[10px] font-semibold">
-                            🍽 {meal}: {place as string}
-                          </span>
-                        ))}
+                      <div className="mt-3 pt-3 border-t border-border/50">
+                        <h5 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Suggested Meals</h5>
+                        <div className="grid gap-2">
+                          {Object.entries(day.meals).map(([meal, suggestion]) => (
+                            <div key={meal} className="flex items-start gap-2 text-xs">
+                              <span className="font-semibold text-coral capitalize min-w-[60px]">{meal}</span>
+                              <span className="text-muted-foreground">{suggestion as string}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
+
+                    {/* Daily Tip */}
                     {day.tips && (
-                      <p className="mt-2 text-[11px] text-ocean italic">💡 {day.tips}</p>
+                      <div className="mt-3 p-2.5 rounded-xl bg-primary/5 border border-primary/10">
+                        <p className="text-xs text-primary/90 italic flex gap-2">
+                          <span className="font-bold not-italic">💡 Daily Tip:</span>
+                          {day.tips}
+                        </p>
+                      </div>
                     )}
+                    
                   </motion.div>
                 ))}
               </div>

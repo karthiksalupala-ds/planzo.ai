@@ -18,8 +18,8 @@ serve(async (req) => {
     const AI_API_KEY = Deno.env.get("AI_API_KEY");
     const AI_API_URL =
       Deno.env.get("AI_API_URL") ||
-      "https://api.groq.com/openai/v1/chat/completions";
-    const AI_MODEL = Deno.env.get("AI_MODEL") || "llama3-8b-8192";
+      "https://openrouter.ai/api/v1/chat/completions";
+    const AI_MODEL = Deno.env.get("AI_MODEL") || "meta-llama/llama-3-70b-instruct";
 
     if (!AI_API_KEY) {
       throw new Error(
@@ -81,6 +81,7 @@ Analyze my spending and give me coaching tips for my next trip.`;
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
+        response_format: { type: "json_object" },
       }),
     });
 
@@ -119,15 +120,35 @@ Analyze my spending and give me coaching tips for my next trip.`;
     }
 
     const data = await aiResponse.json();
-    const content = data.choices?.[0]?.message?.content || "";
+    let content = data.choices?.[0]?.message?.content || "";
 
-    // ✅ FIXED REGEX (single-line, valid)
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-    const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
+    // Robust JSON extraction
+    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    let jsonString = content;
 
-    return new Response(jsonStr, {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    if (jsonMatch && jsonMatch[1]) {
+      jsonString = jsonMatch[1];
+    }
+
+    const firstBrace = jsonString.indexOf('{');
+    const lastBrace = jsonString.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      jsonString = jsonString.substring(firstBrace, lastBrace + 1);
+    }
+
+    // Remove trailing commas which are common in LLM JSON
+    jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
+
+    try {
+      // Parse and re-stringify to ensure we send valid JSON
+      const parsed = JSON.parse(jsonString);
+      return new Response(JSON.stringify(parsed), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      console.error("post-trip-coach failed to parse AI response:", jsonString.substring(0, 500));
+      throw new Error("AI returned invalid JSON");
+    }
   } catch (e) {
     console.error("post-trip-coach error:", e);
 
