@@ -40,6 +40,20 @@ export async function streamTripPlan({
       return;
     }
 
+    const contentType = resp.headers.get("Content-Type");
+    if (contentType && contentType.includes("application/json")) {
+      try {
+        const jsonText = await resp.text();
+        if (jsonText) {
+          onDelta(jsonText);
+        }
+        onDone();
+      } catch (e) {
+        onError(e instanceof Error ? e.message : "Response reading error");
+      }
+      return;
+    }
+
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let textBuffer = "";

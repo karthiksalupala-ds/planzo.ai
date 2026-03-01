@@ -102,21 +102,42 @@ const PlanTrip = () => {
         setRawStream(fullText);
       },
       onDone: () => {
+        if (!fullText.trim()) {
+          setError("The AI returned an empty response. Please try again.");
+          setIsPlanning(false);
+          toast({
+            title: "Empty Response",
+            description: "The AI plan could not be generated. This might be a temporary issue.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
         let parsed = null;
+        let isJsonResponse = true;
+
         try {
-          // Try parsing as standard JSON first (backend now returns clean JSON)
           parsed = JSON.parse(fullText);
         } catch (e) {
-          console.warn("Standard JSON parse failed, attempting fallback...", e);
-          // Fallback to the stream parser if direct parsing fails
           parsed = parseItineraryJSON(fullText);
+          if (parsed === null) {
+            isJsonResponse = false;
+          }
         }
 
-        if (parsed && !parsed.error) {
+        if (isJsonResponse && parsed && !parsed.error) {
           setPlan(parsed);
         } else {
-          console.error("Failed to parse AI response. Raw text received:", fullText);
-          setError(parsed?.error || "Could not parse the AI response. Please try again.");
+          console.error("Failed to parse AI response as JSON. Raw text received:", fullText);
+          const errorMessage = isJsonResponse 
+              ? (parsed?.error || "Could not parse the AI response.")
+              : fullText;
+          setError(errorMessage + " Please try a different query.");
+          toast({
+            title: "AI Response Error",
+            description: "The AI returned a response that couldn't be processed.",
+            variant: "destructive",
+          });
         }
         setIsPlanning(false);
       },
