@@ -20,6 +20,9 @@ const moods = [
   { id: "solo", label: "Solo", icon: User },
 ];
 
+import FloatingChatButton from "@/components/FloatingChatButton";
+import Chatbot from "@/components/Chatbot";
+
 const PlanTrip = () => {
   const [searchParams] = useSearchParams();
   const initialQuery = searchParams.get("q") || "";
@@ -30,6 +33,7 @@ const PlanTrip = () => {
   const [rawStream, setRawStream] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   // Budget state
   const [budget, setBudget] = useState("15000");
@@ -708,6 +712,19 @@ const PlanTrip = () => {
                 </div>
               </div>
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {plan && <FloatingChatButton onClick={() => setIsChatOpen(true)} />}
+      <AnimatePresence>
+        {isChatOpen && plan && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+          >
+            <Chatbot plan={plan} onClose={() => setIsChatOpen(false)} />
           </motion.div>
         )}
       </AnimatePresence>
