@@ -4,13 +4,19 @@ import { useSearchParams } from "react-router-dom";
 import {
   Sparkles, Send, MapPin, IndianRupee, Calendar, Users, ChevronRight,
   Hotel, Utensils, Camera, Loader2, Heart, Mountain, Palmtree, Baby,
-  User, Shield, Backpack, CloudSun, AlertCircle, Save, Train, Plane, Bus,
+  User, Shield, Backpack, CloudSun, AlertCircle, Save, Train, Plane, Bus, RefreshCw, Pencil, TramFront, Bike,
   Car, Navigation, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Share2, XCircle, ShoppingBag, Printer
 } from "lucide-react";
-import { streamTripPlan, parseItineraryJSON } from "@/lib/stream-ai";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import FloatingChatButton from "@/components/FloatingChatButton";
+import Chatbot from "@/components/Chatbot";
+
+interface Message {
+  text: string;
+  isUser: boolean;
+}
 
 const moods = [
   { id: "relax", label: "Relax", icon: Palmtree },
@@ -20,28 +26,32 @@ const moods = [
   { id: "solo", label: "Solo", icon: User },
 ];
 
-import FloatingChatButton from "@/components/FloatingChatButton";
-import Chatbot from "@/components/Chatbot";
-
 const PlanTrip = () => {
   const [searchParams] = useSearchParams();
   const initialQuery = searchParams.get("q") || "";
-  const [query, setQuery] = useState(initialQuery);
+  const [destination, setDestination] = useState(initialQuery);
   const [isPlanning, setIsPlanning] = useState(false);
   const [activeMood, setActiveMood] = useState("adventure");
   const [plan, setPlan] = useState<any>(null);
-  const [rawStream, setRawStream] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [regeneratingDay, setRegeneratingDay] = useState<number | null>(null);
+  const [chatMessages, setChatMessages] = useState<Message[]>([
+    { text: "Hello! I'm your AI trip assistant. Ask me anything about your plan.", isUser: false },
+  ]);
 
   // Budget state
   const [budget, setBudget] = useState("15000");
-  const [days, setDays] = useState("3");
-  const [travelers, setTravelers] = useState("2");
+  const [days, setDays] = useState(3);
+  const [travelers, setTravelers] = useState(2);
 
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  const handleDestinationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDestination(e.target.value);
+  };
 
   const handleSaveTrip = async () => {
     if (!user) {
@@ -52,12 +62,12 @@ const PlanTrip = () => {
     setSaving(true);
     const { error } = await supabase.from("saved_trips").insert({
       user_id: user.id,
-      title: plan.destination || query,
-      query,
+      title: plan.destination || destination,
+      query: destination,
       mood: activeMood,
       budget,
-      days: parseInt(days) || 3,
-      travelers: parseInt(travelers) || 2,
+      days,
+      travelers,
       plan_data: plan,
     });
     setSaving(false);
@@ -91,71 +101,121 @@ const PlanTrip = () => {
     window.print();
   };
 
-  const regeneratePlan = async (q: string, b: string, d: string, t: string, m: string) => {
+  const regeneratePlan = async (destination: string) => {
     setIsPlanning(true);
     setError("");
     setPlan(null);
-    setRawStream("");
+    setChatMessages([
+      { text: "Hello! I'm your AI trip assistant. Ask me anything about your plan.", isUser: false },
+    ]);
 
-    let fullText = "";
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      setError("You are not logged in. Please sign in to plan a trip.");
+      toast({ title: "Authentication Error", description: "You are not logged in.", variant: "destructive" });
+      setIsPlanning(false);
+      return;
+    }
 
-    await streamTripPlan({
-      params: { query: q, budget: b, days: d, travelers: t, mood: m },
-      onDelta: (chunk) => {
-        fullText += chunk;
-        setRawStream(fullText);
+    const { data, error: funcError } = await supabase.functions.invoke("plan-trip", {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
       },
-      onDone: () => {
-        if (!fullText.trim()) {
-          setError("The AI returned an empty response. Please try again.");
-          setIsPlanning(false);
-          toast({
-            title: "Empty Response",
-            description: "The AI plan could not be generated. This might be a temporary issue.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        let parsed = null;
-        let isJsonResponse = true;
-
-        try {
-          parsed = JSON.parse(fullText);
-        } catch (e) {
-          parsed = parseItineraryJSON(fullText);
-          if (parsed === null) {
-            isJsonResponse = false;
-          }
-        }
-
-        if (isJsonResponse && parsed && !parsed.error) {
-          setPlan(parsed);
-        } else {
-          console.error("Failed to parse AI response as JSON. Raw text received:", fullText);
-          const errorMessage = isJsonResponse 
-              ? (parsed?.error || "Could not parse the AI response.")
-              : fullText;
-          setError(errorMessage + " Please try a different query.");
-          toast({
-            title: "AI Response Error",
-            description: "The AI returned a response that couldn't be processed.",
-            variant: "destructive",
-          });
-        }
-        setIsPlanning(false);
-      },
-      onError: (err) => {
-        setError(err);
-        setIsPlanning(false);
-        toast({ title: "AI Error", description: err, variant: "destructive" });
+      body: {
+        query: destination,
+        budget,
+        days: days.toString(),
+        travelers: travelers.toString(),
+        mood: activeMood,
       },
     });
+
+    setIsPlanning(false);
+
+    if (funcError) {
+      const errorMessage = funcError.message || "An unknown error occurred.";
+      setError(errorMessage);
+      toast({ title: "AI Error", description: errorMessage, variant: "destructive" });
+      return;
+    }
+
+    if (data.error) {
+      const errorMessage = data.error || "The AI returned an error.";
+      setError(errorMessage);
+      toast({
+        title: "AI Response Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } else {
+      setPlan(data);
+    }
   };
 
   const handlePlan = async () => {
-    if (!query.trim()) return;
-    await regeneratePlan(query, budget, days, travelers, activeMood);
+    if (!destination.trim()) return;
+    await regeneratePlan(destination);
+  };
+
+  const handleRegenerateDay = async (dayIndex: number) => {
+    if (!plan || regeneratingDay !== null) return;
+    setRegeneratingDay(dayIndex);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      toast({ title: "Authentication Error", description: "You are not logged in.", variant: "destructive" });
+      setRegeneratingDay(null);
+      return;
+    }
+
+    const { data, error } = await supabase.functions.invoke("plan-trip", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: {
+            existingPlan: plan,
+            dayToRegenerate: dayIndex,
+            // Pass original request params for context
+            query: destination,
+            budget,
+            days: days.toString(),
+            travelers: travelers.toString(),
+            mood: activeMood,
+        },
+    });
+
+    setRegeneratingDay(null);
+
+    if (error) {
+        toast({ title: "Regeneration failed", description: error.message, variant: "destructive" });
+        return;
+    }
+
+    if (data.error) {
+        toast({ title: "AI Error", description: data.error, variant: "destructive" });
+    } else {
+        setPlan(currentPlan => {
+            if (!currentPlan) return null;
+            const newItinerary = [...currentPlan.itinerary];
+            // The AI returns a day object, we replace the old one at the correct index.
+            data.day = dayIndex + 1; // Ensure day number is correct based on position
+            newItinerary[dayIndex] = data;
+
+            toast({ title: `Day ${dayIndex + 1} Regenerated!`, description: "Enjoy the new suggestions." });
+            
+            return { ...currentPlan, itinerary: newItinerary };
+        });
+    }
+  };
+
+  const handleNoteChange = (dayIndex: number, note: string) => {
+    setPlan(currentPlan => {
+      if (!currentPlan) return null;
+      const newItinerary = [...currentPlan.itinerary];
+      // Ensure the day object exists before modifying
+      newItinerary[dayIndex] = { ...newItinerary[dayIndex], userNotes: note };
+      return { ...currentPlan, itinerary: newItinerary };
+    });
   };
 
   // Parse budget info from plan
@@ -182,8 +242,8 @@ const PlanTrip = () => {
   return ( 
     <div className="px-5 md:container py-6 max-w-2xl mx-auto">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="font-display text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600">Plan Your Trip</h1>
-        <p className="text-sm text-muted-foreground mt-1">AI-powered itinerary with strict budget control</p>
+        <h1 className="font-display text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600">Let's Plan Your Next Adventure!</h1>
+        <p className="text-sm text-muted-foreground mt-1">Your AI-powered trip planner for personalized itineraries and smart budget management.</p>
       </motion.div>
 
       {/* Mood Chips */}
@@ -214,14 +274,13 @@ const PlanTrip = () => {
             <Sparkles className="h-5 w-5 text-primary-foreground" />
           </div>
           <div className="flex-1">
-            <p className="text-xs font-semibold text-muted-foreground mb-2">Describe your dream trip</p>
-            <textarea
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder='e.g. "Plan a 3-day Goa trip under ₹15,000 for couples"'
-              rows={3}
+            <input
+              value={destination}
+              onChange={handleDestinationChange}
+              placeholder='Enter a destination'
               className="w-full bg-muted/50 rounded-xl px-3 py-2.5 text-sm outline-none resize-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 transition-shadow"
             />
+            <p className="text-xs text-muted-foreground mt-1">e.g. Goa, Bali, etc.</p>
           </div>
         </div>
 
@@ -244,9 +303,9 @@ const PlanTrip = () => {
               <Calendar className="h-3 w-3" /> Days
             </label>
             <input 
-              type="text" 
+              type="number" 
               value={days} 
-              onChange={(e) => setDays(e.target.value)} 
+              onChange={(e) => setDays(parseInt(e.target.value))} 
               className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20" 
               placeholder="3" 
             />
@@ -256,16 +315,16 @@ const PlanTrip = () => {
               <Users className="h-3 w-3" /> Travelers
             </label>
             <input 
-              type="text" 
+              type="number" 
               value={travelers} 
-              onChange={(e) => setTravelers(e.target.value)} 
+              onChange={(e) => setTravelers(parseInt(e.target.value))} 
               className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20" 
               placeholder="2" 
             />
           </div>
         </div>
 
-        <button onClick={handlePlan} disabled={isPlanning || !query.trim()} className="w-full mt-4 py-3 rounded-xl gradient-hero text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
+        <button onClick={handlePlan} disabled={isPlanning || !destination.trim()} className="w-full mt-4 py-3 rounded-xl gradient-hero text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
           {isPlanning ? (
             <><Loader2 className="h-4 w-4 animate-spin" />Generating with AI...</>
           ) : (
@@ -292,14 +351,14 @@ const PlanTrip = () => {
       )}
 
       {/* Streaming indicator */}
-      {isPlanning && rawStream && (
+      {isPlanning && !plan && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 p-4 rounded-2xl bg-card shadow-card">
           <div className="flex items-center gap-2 mb-2">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
             <p className="text-xs font-semibold text-muted-foreground">AI is crafting your itinerary with images...</p>
           </div>
           <div className="h-2 rounded-full bg-muted overflow-hidden">
-            <motion.div animate={{ width: ["0%", "100%"] }} transition={{ duration: 8, ease: "linear" }} className="h-full rounded-full gradient-hero" />
+            <motion.div animate={{ width: ["0%", "100%"] }} transition={{ duration: 8, ease: "linear", repeat: Infinity }} className="h-full rounded-full gradient-hero" />
           </div>
         </motion.div>
       )}
@@ -571,16 +630,33 @@ const PlanTrip = () => {
                 <h3 className="font-display font-semibold text-foreground text-sm flex items-center gap-2 mb-3">
                   <MapPin className="h-4 w-4 text-coral" /> Getting Around Locally
                 </h3>
-                <div className="space-y-3">
-                  {plan.localTransport.map((item: any, i: number) => (
-                    <div key={i} className="p-3 rounded-lg bg-muted/30">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-semibold text-foreground">{item.mode}</span>
-                        {item.estimatedDailyCost > 0 && <span className="text-xs font-bold text-primary">~₹{item.estimatedDailyCost.toLocaleString()}/day</span>}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">{item.notes}</p>
-                    </div>
-                  ))}
+                <div className="space-y-2">
+                  {plan.localTransport.map((item: any, i: number) => {
+                    const modeLower = item.mode?.toLowerCase() || '';
+                    let Icon = Car;
+                    if (modeLower.includes('bus')) Icon = Bus;
+                    if (modeLower.includes('metro') || modeLower.includes('train')) Icon = TramFront;
+                    if (modeLower.includes('scooter') || modeLower.includes('bike')) Icon = Bike;
+                    if (modeLower.includes('ride-sharing') || modeLower.includes('taxi')) Icon = Car;
+                    if (modeLower.includes('rickshaw') || modeLower.includes('tuk-tuk')) Icon = Car;
+
+                    return (
+                      <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 * i }}
+                        className="flex items-start gap-3 p-3 rounded-xl bg-muted/30 border border-border/50"
+                      >
+                        <div className="h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-coral/10">
+                          <Icon className="h-5 w-5 text-coral" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-foreground">{item.mode}</span>
+                            {item.estimatedDailyCost > 0 && <span className="text-xs font-bold text-primary">~₹{item.estimatedDailyCost.toLocaleString()}/day</span>}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">{item.notes}</p>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -590,90 +666,134 @@ const PlanTrip = () => {
               <div className="space-y-3">
                 <h3 className="font-display font-semibold text-foreground text-sm">Your Itinerary</h3>
                 {plan.itinerary.map((day: any, i: number) => (
-                  <motion.div key={day.day} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 + i * 0.1 }} className="p-4 rounded-2xl bg-card shadow-card overflow-hidden">
+                  <motion.div key={day.day} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.1 }} className="rounded-2xl bg-card shadow-card overflow-hidden">
                     {/* Day Hero Image from AI */}
                     {day.heroImage && (
-                      <div className="relative -mx-4 -mt-4 mb-3 h-32 overflow-hidden">
+                      <div className="relative mb-3 h-40 overflow-hidden group">
                         <img 
                           src={day.heroImage} 
                           alt={day.title}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none';
                           }}
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                        <div className="absolute bottom-2 left-4">
-                          <div className="h-6 w-6 rounded-lg gradient-warm flex items-center justify-center">
-                            <span className="text-xs font-bold text-accent-foreground">{day.day}</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    {!day.heroImage && (
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="h-8 w-8 rounded-lg gradient-warm flex items-center justify-center">
-                          <span className="text-xs font-bold text-accent-foreground">{day.day}</span>
-                        </div>
-                        <h4 className="font-display font-semibold text-foreground text-sm">{day.title}</h4>
-                      </div>
-                    )}
-                    
-                    {/* Activities with Images from AI */}
-                    {day.activities && Array.isArray(day.activities) && day.activities.map((activity: any, j: number) => (
-                      <div key={j} className="mb-3">
-                        {activity.image ? (
-                          <div className="flex gap-3">
-                            <img 
-                              src={activity.image} 
-                              alt={activity.name || activity.place}
-                              className="w-20 h-16 rounded-lg object-cover flex-shrink-0"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none';
-                              }}
-                            />
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <ChevronRight className="h-3 w-3 text-primary flex-shrink-0" />
-                                <span className="font-medium text-foreground">{activity.name || activity}</span>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+                        <div className="absolute bottom-3 left-4 right-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="h-9 w-9 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
+                                  <span className="text-lg font-bold text-white">{day.day}</span>
                               </div>
-                              {activity.place && <p className="text-[10px] text-muted-foreground ml-5">{activity.place}</p>}
+                              <div>
+                                <p className="text-xs text-white/80">Day {day.day}</p>
+                                <h4 className="font-display font-bold text-white text-lg leading-tight">{day.title}</h4>
+                              </div>
                             </div>
+                            <button
+                              onClick={() => handleRegenerateDay(i)}
+                              disabled={regeneratingDay !== null}
+                              className="p-1.5 rounded-full bg-black/20 hover:bg-black/40 backdrop-blur-sm text-white transition-colors disabled:opacity-50"
+                              title="Regenerate this day"
+                            >
+                              {regeneratingDay === i ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-4 w-4" />
+                              )}
+                            </button>
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <ChevronRight className="h-3 w-3 text-primary flex-shrink-0" />
-                            <span>{typeof activity === 'string' ? activity : activity.name || activity}</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-
-                    {/* Meals */}
-                    {day.meals && (
-                      <div className="mt-3 pt-3 border-t border-border/50">
-                        <h5 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Suggested Meals</h5>
-                        <div className="grid gap-2">
-                          {Object.entries(day.meals).map(([meal, suggestion]) => (
-                            <div key={meal} className="flex items-start gap-2 text-xs">
-                              <span className="font-semibold text-coral capitalize min-w-[60px]">{meal}</span>
-                              <span className="text-muted-foreground">{suggestion as string}</span>
-                            </div>
-                          ))}
                         </div>
                       </div>
                     )}
-
-                    {/* Daily Tip */}
-                    {day.tips && (
-                      <div className="mt-3 p-2.5 rounded-xl bg-primary/5 border border-primary/10">
-                        <p className="text-xs text-primary/90 italic flex gap-2">
-                          <span className="font-bold not-italic">💡 Daily Tip:</span>
-                          {day.tips}
-                        </p>
+                    <div className="p-4 pt-0">
+                      {!day.heroImage && (
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="flex-1 flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-lg gradient-warm flex items-center justify-center flex-shrink-0">
+                              <span className="text-base font-bold text-accent-foreground">{day.day}</span>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Day {day.day}</p>
+                              <h4 className="font-display font-semibold text-foreground text-base leading-tight">{day.title}</h4>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleRegenerateDay(i)}
+                            disabled={regeneratingDay !== null}
+                            className="p-1.5 rounded-full hover:bg-muted transition-colors disabled:opacity-50"
+                            title="Regenerate this day"
+                          >
+                            {regeneratingDay === i ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </button>
+                        </div>
+                      )}
+                      
+                      {/* Activities with Images from AI */}
+                      <div className="space-y-2">
+                        {day.activities && Array.isArray(day.activities) && day.activities.map((activity: any, j: number) => (
+                          <motion.div 
+                            key={j}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.3 + j * 0.05 }}
+                          >
+                            {activity.image ? (
+                              <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors">
+                                <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                                  <img 
+                                    src={activity.image} 
+                                    alt={activity.name || activity.place}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = 'none';
+                                    }}
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <p className="font-semibold text-sm text-foreground">{activity.name || activity}</p>
+                                  {activity.place && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><MapPin className="h-3 w-3" />{activity.place}</p>}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground p-2">
+                                <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
+                                <span>{typeof activity === 'string' ? activity : activity.name || activity}</span>
+                              </div>
+                            )}
+                          </motion.div>
+                        ))}
                       </div>
-                    )}
-                    
+
+                      {/* Meals */}
+                      {day.meals && (
+                        <div className="mt-3 pt-3 border-t border-border/50">
+                          <h5 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Suggested Meals</h5>
+                          <div className="grid gap-2">
+                            {Object.entries(day.meals).map(([meal, suggestion]) => (
+                              <div key={meal} className="flex items-start gap-2 text-xs">
+                                <span className="font-semibold text-coral capitalize min-w-[60px]">{meal}</span>
+                                <span className="text-muted-foreground">{suggestion as string}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Daily Tip */}
+                      {day.tips && (
+                        <div className="mt-3 p-2.5 rounded-xl bg-primary/5 border border-primary/10">
+                          <p className="text-xs text-primary/90 italic flex gap-2">
+                            <span className="font-bold not-italic">💡 Daily Tip:</span>
+                            {day.tips}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </motion.div>
                 ))}
               </div>
@@ -724,7 +844,12 @@ const PlanTrip = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
           >
-            <Chatbot plan={plan} onClose={() => setIsChatOpen(false)} />
+            <Chatbot
+              plan={plan}
+              onClose={() => setIsChatOpen(false)}
+              messages={chatMessages}
+              setMessages={setChatMessages}
+            />
           </motion.div>
         )}
       </AnimatePresence>

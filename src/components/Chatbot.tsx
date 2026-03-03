@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, X, Bot } from 'lucide-react';
+import { Send, X, Bot, Sparkles } from 'lucide-react';
 import { streamChatResponse } from '@/lib/stream-ai';
 
 interface Message {
@@ -8,14 +8,20 @@ interface Message {
 }
 
 interface ChatbotProps {
-  plan: any; 
+  plan?: any;
   onClose: () => void;
+  messages: Message[];
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 }
 
-const Chatbot = ({ plan, onClose }: ChatbotProps) => {
-  const [messages, setMessages] = useState<Message[]>([
-    { text: "Hello! How can I help you with this trip plan?", isUser: false },
-  ]);
+const suggestedPrompts = [
+  "What are some good restaurants near my hotel?",
+  "Summarize my plan for Day 2.",
+  "What's the weather like?",
+  "Suggest a good spot for photography.",
+];
+
+const Chatbot = ({ plan, onClose, messages, setMessages }: ChatbotProps) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
@@ -26,20 +32,23 @@ const Chatbot = ({ plan, onClose }: ChatbotProps) => {
 
   useEffect(scrollToBottom, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const sendMessage = async (messageText: string) => {
+    if (!messageText.trim() || isLoading) return;
 
-    const userMessage: Message = { text: input, isUser: true };
+    const userMessage: Message = { text: messageText, isUser: true };
     setMessages((prev) => [...prev, userMessage]);
-    setInput('');
     setIsLoading(true);
 
     let fullResponse = '';
-    const botMessage: Message = { text: '', isUser: false };
-    setMessages((prev) => [...prev, botMessage]);
+    setMessages((prev) => [...prev, { text: '', isUser: false }]);
+
+    const params: { query: string; planContext?: string } = { query: messageText };
+    if (plan) {
+      params.planContext = JSON.stringify(plan);
+    }
 
     await streamChatResponse({
-      params: { query: input, planContext: JSON.stringify(plan) },
+      params,
       onDelta: (chunk) => {
         fullResponse += chunk;
         setMessages((prev) =>
@@ -62,6 +71,11 @@ const Chatbot = ({ plan, onClose }: ChatbotProps) => {
         setIsLoading(false);
       },
     });
+  };
+
+  const handleSend = async () => {
+    sendMessage(input);
+    setInput('');
   };
 
   return (
@@ -100,6 +114,22 @@ const Chatbot = ({ plan, onClose }: ChatbotProps) => {
         <div ref={messagesEndRef} />
       </div>
       <div className="p-3 border-t bg-card">
+        {messages.filter(m => m.isUser).length === 0 && (
+            <div className="mb-3">
+                <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-primary" /> Try asking...</p>
+                <div className="flex flex-wrap gap-1.5">
+                    {suggestedPrompts.map((prompt, i) => (
+                        <button 
+                            key={i}
+                            onClick={() => sendMessage(prompt)}
+                            className="px-3 py-1 text-[11px] bg-muted text-muted-foreground rounded-full hover:bg-primary/10 hover:text-primary transition-colors"
+                        >
+                            {prompt}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        )}
         <div className="relative">
           <textarea
             value={input}

@@ -22,6 +22,8 @@ interface TripResponse {
     status: string;
     totalEstimated: number;
     userBudget: number;
+    usagePercentage: number;
+    remaining: number;
     emergencyBuffer: number;
     withinBudget: boolean;
   };
@@ -40,7 +42,7 @@ interface TripResponse {
     day: number;
     title: string;
     heroImage: string;
-    activities: { name: string; place: string; image: string; lat: number; lng: number }[];
+    activities: { name: string; place: string; imageSearchQuery: string; image: string; lat: number; lng: number }[];
     meals: { breakfast: string; lunch: string; dinner: string };
     tips: string;
   }[];
@@ -48,6 +50,13 @@ interface TripResponse {
   safetyTips: string[];
   bestTimeToVisit: string;
   weatherNote: string;
+}
+
+class AIError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+    this.name = 'AIError';
+  }
 }
 
 const FALLBACK_IMAGE = "https://images.pexels.com/photos/1271619/pexels-photo-1271619.jpeg?auto=compress&cs=tinysrgb&w=800";
@@ -65,11 +74,11 @@ Return ONLY valid JSON matching this exact schema (no markdown, no explanation):
   "mood": "string (e.g. Adventurous, Relaxing, Cultural)",
   "budgetBreakdown": { "accommodation": number, "food": number, "transport": number, "activities": number, "miscellaneous": number },
   "travelOptions": [{ "mode": "string", "from": "string", "to": "string", "estimatedCost": number, "duration": "string" }],
-  "localTransport": [{ "mode": "string", "estimatedDailyCost": number, "notes": "string" }],
+  "localTransport": [{ "mode": "string", "estimatedDailyCost": number, "notes": "string (e.g., 'Best for short distances, convenient but can be slow in traffic.')" }],
   "itinerary": [{ 
     "day": number, 
     "title": "string", 
-    "activities": [{ "name": "string", "place": "string", "lat": number, "lng": number }],
+    "activities": [{ "name": "string", "place": "string", "imageSearchQuery": "string (descriptive, for Pexels API)", "lat": number, "lng": number }],
     "meals": { "breakfast": "string", "lunch": "string", "dinner": "string" },
     "tips": "string"
   }],
@@ -78,7 +87,7 @@ Return ONLY valid JSON matching this exact schema (no markdown, no explanation):
   "bestTimeToVisit": "string",
   "map": { "lat": number, "lng": number }
 }
-Budget values must be in INR (₹). Be specific with place names and coordinates. Generate ${req.days || 3} days of itinerary for ${req.travelers || 2} travelers.`;
+Budget values must be in INR (₹). Be specific with place names, coordinates, and image search queries. Generate ${req.days || 3} days of itinerary for ${req.travelers || 2} travelers.`;
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -102,7 +111,7 @@ Budget values must be in INR (₹). Be specific with place names and coordinates
   if (!response.ok) {
     const errText = await response.text();
     console.error("AI gateway error:", response.status, errText);
-    throw new Error(`AI error: ${response.status}`);
+    throw new AIError(`AI error: ${response.status}`, response.status);
   }
 
   const data = await response.json();
@@ -171,19 +180,90 @@ function validateBudget(trip: TripResponse, userBudget: number): TripResponse {
 
   const adjustedTotal = Object.values(adjustedBreakdown).reduce((a, b) => a + b, 0);
   const adjustedBuffer = Math.round(adjustedTotal * bufferPercent);
+  const usagePercentage = userBudget > 0 ? Math.round((adjustedTotal / userBudget) * 100) : 0;
+  const remaining = userBudget - adjustedTotal;
+
+  let status = "🟢 Within Budget";
+  if (usagePercentage > 100) {
+    status = "🔴 Over Budget";
+  } else if (usagePercentage > 85) {
+    status = "🟡 Near Budget";
+  }
 
   return {
     ...trip,
     budgetBreakdown: adjustedBreakdown,
     travelOptions: adjustedTravel,
     budgetHealth: {
-      status: adjustedTotal + adjustedBuffer <= userBudget ? "Healthy" : "Tight",
+      status,
       totalEstimated: adjustedTotal,
       userBudget,
+      usagePercentage,
+      remaining,
       emergencyBuffer: adjustedBuffer,
       withinBudget: adjustedTotal + adjustedBuffer <= userBudget,
     },
   };
+}
+
+// ─── 2a. Regenerate a Single Day via AI ──────────────────────────────
+async function regenerateSingleDay(existingPlan: TripResponse, dayIndex: number, originalRequest: TripRequest): Promise<any> {
+  const AI_API_KEY = Deno.env.get("AI_API_KEY");
+  if (!AI_API_KEY) throw new Error("AI_API_KEY not configured");
+
+  const dayToRegenerate = dayIndex + 1; // 1-based for prompt
+
+  const systemPrompt = `You are a professional travel planning AI. You are tasked with regenerating a single day of an existing itinerary.
+- The user's original request was for a ${originalRequest.days}-day trip to ${existingPlan.destination} for ${originalRequest.travelers} people with a budget of ${originalRequest.budget} INR and a mood of "${existingPlan.mood}".
+- Do NOT repeat activities from other days.
+- Provide a fresh and interesting alternative for Day ${dayToRegenerate}.
+- Return ONLY a single valid JSON object for the regenerated day, matching this exact schema (no markdown, no explanation):
+{ 
+  "day": ${dayToRegenerate}, 
+  "title": "string", 
+  "activities": [{ "name": "string", "place": "string", "imageSearchQuery": "string (descriptive, for Pexels API)", "lat": number, "lng": number }],
+  "meals": { "breakfast": "string", "lunch": "string", "dinner": "string" },
+  "tips": "string"
+}`;
+
+  const contextMessage = `Here is the existing itinerary for context (you are regenerating Day ${dayToRegenerate}):\n${JSON.stringify(existingPlan.itinerary.map(d => ({day: d.day, title: d.title, activities: d.activities.map(a => a.name)})) , null, 2)}`;
+
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+          Authorization: `Bearer ${AI_API_KEY}`,
+          "HTTP-Referer": "https://planzo.ai",
+          "X-Title": "Planzo AI",
+          "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+          model: "meta-llama/llama-3-70b-instruct",
+          messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: contextMessage },
+          ],
+          temperature: 0.8,
+          response_format: { type: "json_object" },
+      }),
+  });
+
+  if (!response.ok) {
+      const errText = await response.text();
+      console.error("AI gateway error (regenerate):", response.status, errText);
+      throw new AIError(`AI error: ${response.status}`, response.status);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content || "";
+
+  try {
+      const newDay = JSON.parse(content);
+      newDay.day = dayToRegenerate; // Ensure day number is correct
+      return newDay;
+  } catch {
+      console.error("Failed to parse AI response (regenerate):", content.substring(0, 500));
+      throw new Error("AI returned invalid JSON for day regeneration");
+  }
 }
 
 // ─── 3. Fetch Images from Pexels ─────────────────────────────────────
@@ -203,12 +283,16 @@ async function fetchImages(trip: TripResponse): Promise<TripResponse> {
   async function searchPexels(query: string): Promise<string> {
     try {
       const res = await fetch(
-        `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`,
+        `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=5&orientation=landscape`,
         { headers: { Authorization: PEXELS_API_KEY! } }
       );
       if (!res.ok) return FALLBACK_IMAGE;
       const data = await res.json();
-      return data.photos?.[0]?.src?.large2x || data.photos?.[0]?.src?.large || FALLBACK_IMAGE;
+      if (!data.photos || data.photos.length === 0) return FALLBACK_IMAGE;
+
+      // Pick a random photo from the results to increase variety
+      const randomPhoto = data.photos[Math.floor(Math.random() * data.photos.length)];
+      return randomPhoto.src?.large2x || randomPhoto.src?.large || FALLBACK_IMAGE;
     } catch {
       return FALLBACK_IMAGE;
     }
@@ -224,7 +308,7 @@ async function fetchImages(trip: TripResponse): Promise<TripResponse> {
       const activities = await Promise.all(
         day.activities.map(async (act) => ({
           ...act,
-          image: await searchPexels(`${act.place || act.name} ${trip.destination}`),
+          image: await searchPexels(act.imageSearchQuery || `${act.place || act.name} ${trip.destination}`),
         }))
       );
       return { ...day, heroImage, activities };
@@ -322,8 +406,38 @@ serve(async (req) => {
   }
 
   try {
-    const body: TripRequest = await req.json();
+    const body: TripRequest & { dayToRegenerate?: number; existingPlan?: any } = await req.json();
 
+    // New logic for regenerating a single day
+    if (body.dayToRegenerate !== undefined && body.existingPlan) {
+      console.log(`[plan-trip] Regenerating day ${body.dayToRegenerate} for: "${body.existingPlan.destination}"`);
+      
+      let newDay = await regenerateSingleDay(body.existingPlan, body.dayToRegenerate, body);
+
+      // We need to fetch images for this new day.
+      // Create a temporary trip object for fetchImages function.
+      const tempTrip = { 
+        ...body.existingPlan, 
+        itinerary: [newDay] 
+      };
+      const tripWithImages = await fetchImages(tempTrip);
+      newDay = tripWithImages.itinerary[0];
+
+      // Also need to ensure lat/lng are present from the main plan
+      newDay.activities = newDay.activities.map((act: any) => ({
+        ...act,
+        lat: act.lat || body.existingPlan.map.lat,
+        lng: act.lng || body.existingPlan.map.lng,
+      }));
+
+      console.log(`[plan-trip] Done regenerating day ${newDay.day}`);
+
+      return new Response(JSON.stringify(newDay), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Existing logic for full plan generation
     if (!body.query?.trim()) {
       return new Response(JSON.stringify({ error: "Query is required" }), {
         status: 400,
@@ -365,13 +479,11 @@ serve(async (req) => {
   } catch (e) {
     console.error("[plan-trip] Error:", e);
 
-    const status = e instanceof Error && e.message.includes("AI error: 429") ? 429
-      : e instanceof Error && e.message.includes("AI error: 402") ? 402
-      : 500;
+    const status = e instanceof AIError ? e.status : 500;
 
     const message = status === 429 ? "Rate limit exceeded. Please try again shortly."
       : status === 402 ? "AI credits exhausted. Please add funds."
-      : e instanceof Error ? e.message : "Internal server error";
+      : e instanceof Error ? e.message.split('\n')[0] : "Internal server error";
 
     return new Response(JSON.stringify({ error: message }), {
       status,

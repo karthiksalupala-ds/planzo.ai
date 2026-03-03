@@ -1,3 +1,5 @@
+import { supabase } from "@/integrations/supabase/client";
+
 const PLAN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`;
 
 export interface PlanTripParams {
@@ -20,11 +22,13 @@ export async function streamTripPlan({
   onError: (error: string) => void;
 }) {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+
     const resp = await fetch(PLAN_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        Authorization: `Bearer ${session?.access_token}`,
       },
       body: JSON.stringify(params),
     });
@@ -123,7 +127,7 @@ export function parseItineraryJSON(raw: string): any | null {
   }
 }
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/trip-chat-agent`;
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
 export interface ChatParams {
   query: string;
@@ -142,11 +146,13 @@ export async function streamChatResponse({
   onError: (error: string) => void;
 }) {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+
     const resp = await fetch(CHAT_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        Authorization: `Bearer ${session?.access_token}`,
       },
       body: JSON.stringify(params),
     });
