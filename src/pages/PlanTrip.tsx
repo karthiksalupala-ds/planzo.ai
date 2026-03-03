@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import Chatbot from "@/components/Chatbot";
+import PlanSkeleton from "@/components/PlanSkeleton";
 
 interface Message {
   text: string;
@@ -117,38 +118,35 @@ const PlanTrip = () => {
       return;
     }
 
-    const { data, error: funcError } = await supabase.functions.invoke("plan-trip", {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: {
-        query: destination,
-        budget,
-        days: days.toString(),
-        travelers: travelers.toString(),
-        mood: activeMood,
-      },
-    });
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          query: destination,
+          budget,
+          days: days.toString(),
+          travelers: travelers.toString(),
+          mood: activeMood,
+        }),
+      });
 
-    setIsPlanning(false);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
 
-    if (funcError) {
-      const errorMessage = funcError.message || "An unknown error occurred.";
+      const data = await response.json();
+      setPlan(data);
+    } catch (err: any) {
+      const errorMessage = err.message || "An unknown error occurred.";
       setError(errorMessage);
       toast({ title: "AI Error", description: errorMessage, variant: "destructive" });
-      return;
-    }
-
-    if (data.error) {
-      const errorMessage = data.error || "The AI returned an error.";
-      setError(errorMessage);
-      toast({
-        title: "AI Response Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } else {
-      setPlan(data);
+    } finally {
+      setIsPlanning(false);
     }
   };
 
@@ -168,43 +166,54 @@ const PlanTrip = () => {
       return;
     }
 
-    const { data, error } = await supabase.functions.invoke("plan-trip", {
+    try {
+      console.log("Session:",session)
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`, {
+        method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: {
-            existingPlan: plan,
-            dayToRegenerate: dayIndex,
-            // Pass original request params for context
-            query: destination,
-            budget,
-            days: days.toString(),
-            travelers: travelers.toString(),
-            mood: activeMood,
-        },
-    });
+        body: JSON.stringify({
+          existingPlan: plan,
+          dayToRegenerate: dayIndex,
+          query: destination,
+          budget,
+          days: days.toString(),
+          travelers: travelers.toString(),
+          mood: activeMood,
+        }),
+      });
 
-    setRegeneratingDay(null);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
 
-    if (error) {
-        toast({ title: "Regeneration failed", description: error.message, variant: "destructive" });
-        return;
-    }
+      const data = await response.json();
 
-    if (data.error) {
-        toast({ title: "AI Error", description: data.error, variant: "destructive" });
-    } else {
-        setPlan(currentPlan => {
-            if (!currentPlan) return null;
-            const newItinerary = [...currentPlan.itinerary];
-            // The AI returns a day object, we replace the old one at the correct index.
-            data.day = dayIndex + 1; // Ensure day number is correct based on position
-            newItinerary[dayIndex] = data;
+      setPlan((currentPlan) => {
+        if (!currentPlan) return null;
+        const newItinerary = [...currentPlan.itinerary];
+        // The AI returns a day object, we replace the old one at the correct index.
+        data.day = dayIndex + 1; // Ensure day number is correct based on position
+        newItinerary[dayIndex] = data;
 
-            toast({ title: `Day ${dayIndex + 1} Regenerated!`, description: "Enjoy the new suggestions." });
-            
-            return { ...currentPlan, itinerary: newItinerary };
+        toast({
+          title: `Day ${dayIndex + 1} Regenerated!`,
+          description: "Enjoy the new suggestions.",
         });
+
+        return { ...currentPlan, itinerary: newItinerary };
+      });
+    } catch (err: any) {
+      toast({
+        title: "Regeneration failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setRegeneratingDay(null);
     }
   };
 
@@ -362,6 +371,8 @@ const PlanTrip = () => {
           </div>
         </motion.div>
       )}
+      {/* Loading Skeleton */}
+      {isPlanning && !plan && <PlanSkeleton />}
 
       {/* Generated Plan */}
       <AnimatePresence>
@@ -474,7 +485,7 @@ const PlanTrip = () => {
                 <div className="rounded-xl overflow-hidden border border-border/50 h-48">
                   <iframe
                     title="Trip Location"
-                    src={plan.map.embedUrl}
+                    src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(plan.destination)}&zoom=11`}
                     width="100%"
                     height="100%"
                     style={{ border: 0 }}
