@@ -258,3 +258,59 @@ Always prioritize helpful travel guidance over technical explanations.`;
   }
 }
 
+export async function generateAlternativeActivity(
+  destination: string,
+  mood: string,
+  oldActivityName: string
+): Promise<{ name: string; place: string; imageSearchQuery: string } | null> {
+  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+  if (!apiKey) return null;
+
+  const systemPrompt = `You are a professional travel planning AI. Return ONLY a valid JSON object matching this schema:
+{ "name": "string", "place": "string", "imageSearchQuery": "string (descriptive, for Pexels)" }
+Do not provide any markdown, just the JSON string.`;
+
+  const userPrompt = `The user is traveling to ${destination} with a mood of "${mood}".
+They do NOT want to do this activity: "${oldActivityName}".
+Suggest ONE alternative activity that is different but fits the mood and city. Return JSON strictly.`;
+
+  try {
+    const resp = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "meta-llama/llama-3-8b-instruct",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.8,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    const content = data?.choices?.[0]?.message?.content || "";
+    
+    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
+    
+    // Remove potential leading/trailing non-json chars
+    const start = jsonStr.indexOf('{');
+    const end = jsonStr.lastIndexOf('}');
+    if (start !== -1 && end !== -1 && end > start) {
+      return JSON.parse(jsonStr.substring(start, end + 1));
+    }
+    
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.error("Alternative generation error", e);
+    return null;
+  }
+}
+

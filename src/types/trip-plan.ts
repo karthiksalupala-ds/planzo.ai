@@ -64,6 +64,7 @@ export interface TripPlan {
   travelOptions?: TravelOption[];
   localTransport?: LocalTransportOption[];
   packingList?: string[];
+  packedItems?: string[];
   safetyTips?: string[];
   map?: {
     lat?: number;
