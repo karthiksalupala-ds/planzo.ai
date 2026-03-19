@@ -10,9 +10,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import Chatbot from "@/components/Chatbot";
-import PlanSkeleton from "@/components/PlanSkeleton";
+import PlanSkeleton from "@/pages/PlanSkeleton";
+import type { LocalTransportOption, TripActivity, TripDay, TripPlan, TravelOption } from "@/types/trip-plan";
 
 interface Message {
   text: string;
@@ -33,7 +35,7 @@ const PlanTrip = () => {
   const [destination, setDestination] = useState(initialQuery);
   const [isPlanning, setIsPlanning] = useState(false);
   const [activeMood, setActiveMood] = useState("adventure");
-  const [plan, setPlan] = useState<any>(null);
+  const [plan, setPlan] = useState<TripPlan | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -69,7 +71,7 @@ const PlanTrip = () => {
       budget,
       days,
       travelers,
-      plan_data: plan,
+      plan_data: plan as unknown as Json,
     });
     setSaving(false);
     if (error) {
@@ -110,20 +112,26 @@ const PlanTrip = () => {
       { text: "Hello! I'm your AI trip assistant. Ask me anything about your plan.", isUser: false },
     ]);
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      setError("You are not logged in. Please sign in to plan a trip.");
-      toast({ title: "Authentication Error", description: "You are not logged in.", variant: "destructive" });
-      setIsPlanning(false);
-      return;
-    }
+    //if (!user) {
+      //setError("You are not logged in. Please sign in to plan a trip.");
+      //toast({ title: "Authentication Error", description: "You are not logged in.", variant: "destructive" });
+      //setIsPlanning(false);
+      //return;
+    //}
+
+    //const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    //if (sessionError || !session) {
+      //setError("Your session may have expired. Please sign in again.");
+      //toast({ title: "Session Error", description: sessionError?.message || "Your session may have expired. Please sign in again.", variant: "destructive" });
+      //setIsPlanning(false);
+      //return;
+    //}
 
     try {
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           query: destination,
@@ -139,10 +147,10 @@ const PlanTrip = () => {
         throw new Error(errorData.error || `Server error: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data: TripPlan = await response.json();
       setPlan(data);
-    } catch (err: any) {
-      const errorMessage = err.message || "An unknown error occurred.";
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
       setError(errorMessage);
       toast({ title: "AI Error", description: errorMessage, variant: "destructive" });
     } finally {
@@ -159,15 +167,20 @@ const PlanTrip = () => {
     if (!plan || regeneratingDay !== null) return;
     setRegeneratingDay(dayIndex);
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    if (!user) {
       toast({ title: "Authentication Error", description: "You are not logged in.", variant: "destructive" });
       setRegeneratingDay(null);
       return;
     }
 
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      toast({ title: "Session Error", description: sessionError?.message || "Your session may have expired. Please sign in again.", variant: "destructive" });
+      setRegeneratingDay(null);
+      return;
+    }
+
     try {
-      console.log("Session:",session)
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`, {
         method: "POST",
         headers: {
@@ -190,10 +203,10 @@ const PlanTrip = () => {
         throw new Error(errorData.error || `Server error: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data: TripDay = await response.json();
 
       setPlan((currentPlan) => {
-        if (!currentPlan) return null;
+        if (!currentPlan?.itinerary) return currentPlan;
         const newItinerary = [...currentPlan.itinerary];
         // The AI returns a day object, we replace the old one at the correct index.
         data.day = dayIndex + 1; // Ensure day number is correct based on position
@@ -206,10 +219,10 @@ const PlanTrip = () => {
 
         return { ...currentPlan, itinerary: newItinerary };
       });
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: "Regeneration failed",
-        description: err.message,
+        description: err instanceof Error ? err.message : "Unable to regenerate this day.",
         variant: "destructive",
       });
     } finally {
@@ -483,16 +496,20 @@ const PlanTrip = () => {
                   </a>
                 </div>
                 <div className="rounded-xl overflow-hidden border border-border/50 h-48">
-                  <iframe
-                    title="Trip Location"
-                    src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(plan.destination)}&zoom=11`}
-                    width="100%"
-                    height="100%"
-                    style={{ border: 0 }}
-                    allowFullScreen
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
+                  {plan.map.lat && plan.map.lng ? (
+                    <iframe
+                      title="Trip Location"
+                      width="100%"
+                      height="100%"
+                      loading="lazy"
+                      style={{ border: 0, borderRadius: '12px' }}
+                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(plan.map.lng) - 0.05},${Number(plan.map.lat) - 0.05},${Number(plan.map.lng) + 0.05},${Number(plan.map.lat) + 0.05}&layer=mapnik&marker=${plan.map.lat},${plan.map.lng}`}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full bg-muted/30 text-sm text-muted-foreground">
+                      Map location unavailable
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -600,7 +617,7 @@ const PlanTrip = () => {
                   <Navigation className="h-4 w-4 text-primary" /> How to Get There
                 </h3>
                 <div className="space-y-3">
-                  {plan.travelOptions.map((opt: any, i: number) => {
+                  {plan.travelOptions.map((opt: TravelOption, i: number) => {
                     const modeLower = opt.mode?.toLowerCase() || '';
                     const icon = modeLower.includes("train") ? Train
                       : modeLower.includes("flight") || modeLower.includes("fly") ? Plane
@@ -642,7 +659,7 @@ const PlanTrip = () => {
                   <MapPin className="h-4 w-4 text-coral" /> Getting Around Locally
                 </h3>
                 <div className="space-y-2">
-                  {plan.localTransport.map((item: any, i: number) => {
+                  {plan.localTransport.map((item: LocalTransportOption, i: number) => {
                     const modeLower = item.mode?.toLowerCase() || '';
                     let Icon = Car;
                     if (modeLower.includes('bus')) Icon = Bus;
@@ -676,7 +693,7 @@ const PlanTrip = () => {
             {plan.itinerary && (
               <div className="space-y-3">
                 <h3 className="font-display font-semibold text-foreground text-sm">Your Itinerary</h3>
-                {plan.itinerary.map((day: any, i: number) => (
+                {plan.itinerary.map((day: TripDay, i: number) => (
                   <motion.div key={day.day} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.1 }} className="rounded-2xl bg-card shadow-card overflow-hidden">
                     {/* Day Hero Image from AI */}
                     {day.heroImage && (
@@ -746,14 +763,14 @@ const PlanTrip = () => {
                       
                       {/* Activities with Images from AI */}
                       <div className="space-y-2">
-                        {day.activities && Array.isArray(day.activities) && day.activities.map((activity: any, j: number) => (
+                        {day.activities && Array.isArray(day.activities) && day.activities.map((activity: TripActivity | string, j: number) => (
                           <motion.div 
                             key={j}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: 0.3 + j * 0.05 }}
                           >
-                            {activity.image ? (
+                            {typeof activity !== 'string' && activity.image ? (
                               <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors">
                                 <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
                                   <img 
@@ -766,14 +783,24 @@ const PlanTrip = () => {
                                   />
                                 </div>
                                 <div className="flex-1">
-                                  <p className="font-semibold text-sm text-foreground">{activity.name || activity}</p>
+                                  <p className="font-semibold text-sm text-foreground">{activity.name}</p>
                                   {activity.place && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><MapPin className="h-3 w-3" />{activity.place}</p>}
+                                  {activity.lat && activity.lng && (
+                                    <a
+                                      href={`https://www.google.com/maps/search/?api=1&query=${activity.lat},${activity.lng}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 mt-1 text-[11px] font-semibold text-primary hover:underline"
+                                    >
+                                      <Navigation className="h-3 w-3" /> View on Map
+                                    </a>
+                                  )}
                                 </div>
                               </div>
                             ) : (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground p-2">
                                 <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
-                                <span>{typeof activity === 'string' ? activity : activity.name || activity}</span>
+                                <span>{typeof activity === 'string' ? activity : activity.name || ''}</span>
                               </div>
                             )}
                           </motion.div>

@@ -5,6 +5,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import type { Tables } from "@/integrations/supabase/types";
+
+type ProfileRow = Tables<"profiles">;
+type SavedTripRow = Tables<"saved_trips">;
 
 const menuItems = [
   { icon: Bookmark, label: "Saved Trips" },
@@ -17,8 +21,8 @@ const Profile = () => {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [profile, setProfile] = useState<any>(null);
-  const [savedTrips, setSavedTrips] = useState<any[]>([]);
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [savedTrips, setSavedTrips] = useState<SavedTripRow[]>([]);
   const [showTrips, setShowTrips] = useState(false);
 
   useEffect(() => {

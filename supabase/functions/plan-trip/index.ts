@@ -37,12 +37,12 @@ interface TripResponse {
   travelOptions: { mode: string; from: string; to: string; estimatedCost: number; duration: string }[];
   localTransport: { mode: string; estimatedDailyCost: number; notes: string }[];
   destinationImage: string;
-  map: { lat: number; lng: number; embedUrl: string };
+  map: { lat: number | null; lng: number | null; embedUrl: string };
   itinerary: {
     day: number;
     title: string;
     heroImage: string;
-    activities: { name: string; place: string; imageSearchQuery: string; image: string; lat: number; lng: number }[];
+    activities: { name: string; place: string; imageSearchQuery: string; image: string; lat: number | null; lng: number | null }[];
     meals: { breakfast: string; lunch: string; dinner: string };
     tips: string;
   }[];
@@ -50,6 +50,39 @@ interface TripResponse {
   safetyTips: string[];
   bestTimeToVisit: string;
   weatherNote: string;
+}
+
+interface AIChatCompletionResponse {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+}
+
+interface WeatherForecastDay {
+  day: {
+    avgtemp_c: number;
+    daily_chance_of_rain: number;
+  };
+}
+
+interface WeatherApiResponse {
+  current?: {
+    condition?: {
+      text?: string;
+    };
+    temp_c?: number;
+    humidity?: number;
+  };
+  forecast?: {
+    forecastday?: WeatherForecastDay[];
+  };
+}
+
+interface RegenerateRequestBody extends TripRequest {
+  dayToRegenerate?: number;
+  existingPlan?: TripResponse;
 }
 
 class AIError extends Error {
@@ -114,8 +147,8 @@ Budget values must be in INR (₹). Be specific with place names, coordinates, a
     throw new AIError(`AI error: ${response.status}`, response.status);
   }
 
-  const data = await response.json();
-  let content = data.choices?.[0]?.message?.content || "";
+  const data: AIChatCompletionResponse = await response.json();
+  const content = data.choices?.[0]?.message?.content || "";
 
   // AI can sometimes return JSON within markdown fences or with extra text.
   // This logic robustly extracts the JSON object.
@@ -207,7 +240,11 @@ function validateBudget(trip: TripResponse, userBudget: number): TripResponse {
 }
 
 // ─── 2a. Regenerate a Single Day via AI ──────────────────────────────
-async function regenerateSingleDay(existingPlan: TripResponse, dayIndex: number, originalRequest: TripRequest): Promise<any> {
+async function regenerateSingleDay(
+  existingPlan: TripResponse,
+  dayIndex: number,
+  originalRequest: TripRequest,
+): Promise<TripResponse["itinerary"][number]> {
   const AI_API_KEY = Deno.env.get("AI_API_KEY");
   if (!AI_API_KEY) throw new Error("AI_API_KEY not configured");
 
@@ -253,7 +290,7 @@ async function regenerateSingleDay(existingPlan: TripResponse, dayIndex: number,
       throw new AIError(`AI error: ${response.status}`, response.status);
   }
 
-  const data = await response.json();
+  const data: AIChatCompletionResponse = await response.json();
   const content = data.choices?.[0]?.message?.content || "";
 
   try {
@@ -287,7 +324,7 @@ async function fetchImages(trip: TripResponse): Promise<TripResponse> {
         { headers: { Authorization: PEXELS_API_KEY! } }
       );
       if (!res.ok) return FALLBACK_IMAGE;
-      const data = await res.json();
+      const data = await res.json() as { photos?: Array<{ src?: { large2x?: string; large?: string } }> };
       if (!data.photos || data.photos.length === 0) return FALLBACK_IMAGE;
 
       // Pick a random photo from the results to increase variety
@@ -337,7 +374,7 @@ async function fetchWeather(trip: TripResponse): Promise<TripResponse> {
       return trip;
     }
 
-    const data = await res.json();
+    const data = await res.json() as WeatherApiResponse;
     const current = data.current;
     const forecast = data.forecast?.forecastday || [];
 
@@ -349,9 +386,9 @@ async function fetchWeather(trip: TripResponse): Promise<TripResponse> {
 
     if (forecast.length > 0) {
       const avgTemp = Math.round(
-        forecast.reduce((sum: number, d: any) => sum + d.day.avgtemp_c, 0) / forecast.length
+        forecast.reduce((sum: number, d: WeatherForecastDay) => sum + d.day.avgtemp_c, 0) / forecast.length
       );
-      const willRain = forecast.some((d: any) => d.day.daily_chance_of_rain > 50);
+      const willRain = forecast.some((d: WeatherForecastDay) => d.day.daily_chance_of_rain > 50);
       weatherNote += ` Forecast avg: ${avgTemp}°C.`;
       if (willRain) {
         weatherNote += " Rain expected — carry an umbrella.";
@@ -377,8 +414,8 @@ function generateMapData(trip: TripResponse): TripResponse {
     console.warn("GOOGLE_MAPS_API_KEY is not set. Map embed will not work correctly.");
   }
 
-  const lat = trip.map?.lat || 0;
-  const lng = trip.map?.lng || 0;
+  const lat = trip.map?.lat ?? null;
+  const lng = trip.map?.lng ?? null;
 
   trip.map = {
     lat,
@@ -391,8 +428,8 @@ function generateMapData(trip: TripResponse): TripResponse {
     ...day,
     activities: day.activities.map((act) => ({
       ...act,
-      lat: act.lat || lat,
-      lng: act.lng || lng,
+      lat: act.lat ?? lat,
+      lng: act.lng ?? lng,
     })),
   }));
 
@@ -406,7 +443,7 @@ serve(async (req) => {
   }
 
   try {
-    const body: TripRequest & { dayToRegenerate?: number; existingPlan?: any } = await req.json();
+    const body: RegenerateRequestBody = await req.json();
 
     // New logic for regenerating a single day
     if (body.dayToRegenerate !== undefined && body.existingPlan) {
@@ -424,10 +461,10 @@ serve(async (req) => {
       newDay = tripWithImages.itinerary[0];
 
       // Also need to ensure lat/lng are present from the main plan
-      newDay.activities = newDay.activities.map((act: any) => ({
+      newDay.activities = newDay.activities.map((act) => ({
         ...act,
-        lat: act.lat || body.existingPlan.map.lat,
-        lng: act.lng || body.existingPlan.map.lng,
+        lat: act.lat ?? body.existingPlan.map.lat,
+        lng: act.lng ?? body.existingPlan.map.lng,
       }));
 
       console.log(`[plan-trip] Done regenerating day ${newDay.day}`);

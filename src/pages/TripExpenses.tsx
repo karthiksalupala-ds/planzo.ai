@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft, Plus, Trash2, Hotel, Utensils, Camera, MapPin, ShoppingBag, MoreHorizontal,
   Loader2, TrendingUp, Sparkles, IndianRupee, PieChart
@@ -8,8 +9,17 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import type { Tables } from "@/integrations/supabase/types";
+import type { ExpenseCoaching, TripPlan } from "@/types/trip-plan";
 
-const categoryConfig: Record<string, { icon: any; label: string; color: string }> = {
+type SavedTripRow = Tables<"saved_trips">;
+type TripExpenseRow = Tables<"trip_expenses">;
+
+type SavedTripWithPlan = Omit<SavedTripRow, 'plan_data'> & {
+  plan_data: TripPlan | null;
+};
+
+const categoryConfig: Record<string, { icon: LucideIcon; label: string; color: string }> = {
   hotels: { icon: Hotel, label: "Hotels", color: "text-blue-500" },
   food: { icon: Utensils, label: "Food", color: "text-orange-500" },
   activities: { icon: Camera, label: "Activities", color: "text-purple-500" },
@@ -24,11 +34,11 @@ const TripExpenses = () => {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [trip, setTrip] = useState<any>(null);
-  const [expenses, setExpenses] = useState<any[]>([]);
+  const [trip, setTrip] = useState<SavedTripWithPlan | null>(null);
+  const [expenses, setExpenses] = useState<TripExpenseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [coaching, setCoaching] = useState<any>(null);
+  const [coaching, setCoaching] = useState<ExpenseCoaching | null>(null);
   const [coachLoading, setCoachLoading] = useState(false);
 
   // New expense form
@@ -38,20 +48,34 @@ const TripExpenses = () => {
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
-    if (!user) { navigate("/auth"); return; }
-    fetchData();
-  }, [user, tripId]);
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
 
-  const fetchData = async () => {
-    setLoading(true);
-    const [tripRes, expRes] = await Promise.all([
-      supabase.from("saved_trips").select("*").eq("id", tripId).maybeSingle(),
-      supabase.from("trip_expenses").select("*").eq("trip_id", tripId).order("expense_date", { ascending: false }),
-    ]);
-    if (tripRes.data) setTrip(tripRes.data);
-    if (expRes.data) setExpenses(expRes.data);
-    setLoading(false);
-  };
+    const loadData = async () => {
+      setLoading(true);
+      const [tripRes, expRes] = await Promise.all([
+        supabase.from("saved_trips").select("*").eq("id", tripId).maybeSingle(),
+        supabase.from("trip_expenses").select("*").eq("trip_id", tripId).order("expense_date", { ascending: false }),
+      ]);
+
+      if (tripRes.data) {
+        setTrip({
+          ...tripRes.data,
+          plan_data: (tripRes.data.plan_data as unknown as TripPlan | null) ?? null,
+        });
+      }
+
+      if (expRes.data) {
+        setExpenses(expRes.data);
+      }
+
+      setLoading(false);
+    };
+
+    void loadData();
+  }, [navigate, tripId, user]);
 
   const addExpense = async () => {
     if (!newAmount || !user || !tripId) return;
@@ -274,7 +298,7 @@ const TripExpenses = () => {
                   <PieChart className="h-4 w-4 text-primary" /> Category Analysis
                 </h3>
                 <div className="space-y-3">
-                  {coaching.categoryBreakdown.map((cat: any, i: number) => {
+                  {coaching.categoryBreakdown.map((cat, i: number) => {
                     const cfg = categoryConfig[cat.category] || categoryConfig.other;
                     const Icon = cfg.icon;
                     const isOver = cat.verdict === "over";

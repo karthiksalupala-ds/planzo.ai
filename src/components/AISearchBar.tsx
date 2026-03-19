@@ -11,7 +11,7 @@ const AISearchBar = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
-      navigate(`/plan?q=${encodeURIComponent(query)}&budget=${budget}&days=${days}&travelers=${travelers}`);
+      navigate(`/plan?q=${encodeURIComponent(query)}`);
     }
   };
 
@@ -65,7 +65,7 @@ const AISearchBar = () => {
               key={s}
               onClick={() => {
                 setQuery(s);
-                navigate(`/plan?q=${encodeURIComponent(query)}&budget=${budget}&days=${days}&travelers=${travelers}`);
+                navigate(`/plan?q=${encodeURIComponent(s)}`);
               }}
               className="flex items-center gap-2 w-full px-3 py-2 text-xs text-foreground hover:bg-muted rounded-lg transition-colors text-left"
             >

@@ -119,8 +119,14 @@ Analyze my spending and give me coaching tips for my next trip.`;
       });
     }
 
-    const data = await aiResponse.json();
-    let content = data.choices?.[0]?.message?.content || "";
+    const data: {
+      choices?: Array<{
+        message?: {
+          content?: string;
+        };
+      }>;
+    } = await aiResponse.json();
+    const content = data.choices?.[0]?.message?.content || "";
 
     // Robust JSON extraction
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);

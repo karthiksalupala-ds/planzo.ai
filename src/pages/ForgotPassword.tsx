@@ -23,11 +23,11 @@ const ForgotPassword = () => {
         title: "Check your email",
         description: "We've sent you a password reset link.",
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Unable to send reset email.",
       });
     } finally {
       setLoading(false);

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, X, Bot, Sparkles } from 'lucide-react';
 import { streamChatResponse } from '@/lib/stream-ai';
+import type { TripPlan } from '@/types/trip-plan';
 
 interface Message {
   text: string;
@@ -8,7 +9,7 @@ interface Message {
 }
 
 interface ChatbotProps {
-  plan?: any;
+  plan?: TripPlan | null;
   onClose: () => void;
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
