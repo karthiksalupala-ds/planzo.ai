@@ -120,7 +120,8 @@ Return ONLY valid JSON matching this exact schema (no markdown, no explanation):
   "bestTimeToVisit": "string",
   "map": { "lat": number, "lng": number }
 }
-Budget values must be in INR (₹). Be specific with place names, coordinates, and image search queries. Generate ${req.days || 3} days of itinerary for ${req.travelers || 2} travelers.`;
+Budget values must be in INR (₹). Be specific with place names, coordinates, and image search queries. Generate ${req.days || 3} days of itinerary for ${req.travelers || 2} travelers.
+If the query contains multiple destinations separated by → (e.g. "Goa → Hampi → Coorg"), create an itinerary that covers all destinations in order. Include inter-city travel days between destinations with travel mode, cost, and duration. Distribute the total days across all destinations proportionally.`;
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -263,91 +264,88 @@ async function regenerateSingleDay(
   "tips": "string"
 }`;
 
-  const contextMessage = `Here is the existing itinerary for context (you are regenerating Day ${dayToRegenerate}):\n${JSON.stringify(existingPlan.itinerary.map(d => ({day: d.day, title: d.title, activities: d.activities.map(a => a.name)})) , null, 2)}`;
+  const contextMessage = `Here is the existing itinerary for context (you are regenerating Day ${dayToRegenerate}):\n${JSON.stringify(existingPlan.itinerary.map(d => ({ day: d.day, title: d.title, activities: d.activities.map(a => a.name) })), null, 2)}`;
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-          Authorization: `Bearer ${AI_API_KEY}`,
-          "HTTP-Referer": "https://planzo.ai",
-          "X-Title": "Planzo AI",
-          "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-          model: "meta-llama/llama-3-70b-instruct",
-          messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: contextMessage },
-          ],
-          temperature: 0.8,
-          response_format: { type: "json_object" },
-      }),
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${AI_API_KEY}`,
+      "HTTP-Referer": "https://planzo.ai",
+      "X-Title": "Planzo AI",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "meta-llama/llama-3-70b-instruct",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: contextMessage },
+      ],
+      temperature: 0.8,
+      response_format: { type: "json_object" },
+    }),
   });
 
   if (!response.ok) {
-      const errText = await response.text();
-      console.error("AI gateway error (regenerate):", response.status, errText);
-      throw new AIError(`AI error: ${response.status}`, response.status);
+    const errText = await response.text();
+    console.error("AI gateway error (regenerate):", response.status, errText);
+    throw new AIError(`AI error: ${response.status}`, response.status);
   }
 
   const data: AIChatCompletionResponse = await response.json();
   const content = data.choices?.[0]?.message?.content || "";
 
   try {
-      const newDay = JSON.parse(content);
-      newDay.day = dayToRegenerate; // Ensure day number is correct
-      return newDay;
+    const newDay = JSON.parse(content);
+    newDay.day = dayToRegenerate; // Ensure day number is correct
+    return newDay;
   } catch {
-      console.error("Failed to parse AI response (regenerate):", content.substring(0, 500));
-      throw new Error("AI returned invalid JSON for day regeneration");
+    console.error("Failed to parse AI response (regenerate):", content.substring(0, 500));
+    throw new Error("AI returned invalid JSON for day regeneration");
   }
 }
 
 // ─── 3. Fetch Images from Pexels ─────────────────────────────────────
-async function fetchImages(trip: TripResponse): Promise<TripResponse> {
+async function getPexelsImage(query: string): Promise<string> {
   const PEXELS_API_KEY = Deno.env.get("PEXELS_API_KEY");
-  if (!PEXELS_API_KEY) {
-    console.warn("PEXELS_API_KEY not set, using fallback images");
-    trip.destinationImage = FALLBACK_IMAGE;
-    trip.itinerary = trip.itinerary.map((day) => ({
-      ...day,
-      heroImage: FALLBACK_IMAGE,
-      activities: day.activities.map((a) => ({ ...a, image: FALLBACK_IMAGE })),
-    }));
-    return trip;
+  if (!PEXELS_API_KEY) return FALLBACK_IMAGE;
+
+  try {
+    const res = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1`,
+      {
+        headers: {
+          Authorization: PEXELS_API_KEY,
+        },
+      }
+    );
+
+    if (!res.ok) return FALLBACK_IMAGE;
+
+    const data = await res.json();
+    return data.photos?.[0]?.src?.large || FALLBACK_IMAGE;
+  } catch {
+    return FALLBACK_IMAGE;
   }
+}
 
-  async function searchPexels(query: string): Promise<string> {
-    try {
-      const res = await fetch(
-        `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=5&orientation=landscape`,
-        { headers: { Authorization: PEXELS_API_KEY! } }
-      );
-      if (!res.ok) return FALLBACK_IMAGE;
-      const data = await res.json() as { photos?: Array<{ src?: { large2x?: string; large?: string } }> };
-      if (!data.photos || data.photos.length === 0) return FALLBACK_IMAGE;
-
-      // Pick a random photo from the results to increase variety
-      const randomPhoto = data.photos[Math.floor(Math.random() * data.photos.length)];
-      return randomPhoto.src?.large2x || randomPhoto.src?.large || FALLBACK_IMAGE;
-    } catch {
-      return FALLBACK_IMAGE;
-    }
-  }
-
+async function fetchImages(trip: TripResponse): Promise<TripResponse> {
   // Fetch destination hero image
-  trip.destinationImage = await searchPexels(`${trip.destination} travel landmark`);
+  trip.destinationImage = await getPexelsImage(`${trip.destination} travel landmark`);
 
-  // Fetch itinerary images in parallel
+  // Fetch itinerary images — each day and activity gets its own unique image
   const updatedItinerary = await Promise.all(
     trip.itinerary.map(async (day) => {
-      const heroImage = await searchPexels(`${trip.destination} ${day.title}`);
+      const heroImage = await getPexelsImage(`${trip.destination} ${day.title}`);
+
       const activities = await Promise.all(
-        day.activities.map(async (act) => ({
-          ...act,
-          image: await searchPexels(act.imageSearchQuery || `${act.place || act.name} ${trip.destination}`),
-        }))
+        day.activities.map(async (act) => {
+          const image = await getPexelsImage(
+            act.imageSearchQuery || act.place || "travel destination"
+          );
+          return { ...act, image };
+        })
       );
+
       return { ...day, heroImage, activities };
     })
   );
@@ -448,14 +446,14 @@ serve(async (req) => {
     // New logic for regenerating a single day
     if (body.dayToRegenerate !== undefined && body.existingPlan) {
       console.log(`[plan-trip] Regenerating day ${body.dayToRegenerate} for: "${body.existingPlan.destination}"`);
-      
+
       let newDay = await regenerateSingleDay(body.existingPlan, body.dayToRegenerate, body);
 
       // We need to fetch images for this new day.
       // Create a temporary trip object for fetchImages function.
-      const tempTrip = { 
-        ...body.existingPlan, 
-        itinerary: [newDay] 
+      const tempTrip = {
+        ...body.existingPlan,
+        itinerary: [newDay]
       };
       const tripWithImages = await fetchImages(tempTrip);
       newDay = tripWithImages.itinerary[0];
@@ -520,7 +518,7 @@ serve(async (req) => {
 
     const message = status === 429 ? "Rate limit exceeded. Please try again shortly."
       : status === 402 ? "AI credits exhausted. Please add funds."
-      : e instanceof Error ? e.message.split('\n')[0] : "Internal server error";
+        : e instanceof Error ? e.message.split('\n')[0] : "Internal server error";
 
     return new Response(JSON.stringify({ error: message }), {
       status,

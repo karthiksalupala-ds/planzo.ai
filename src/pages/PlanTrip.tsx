@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "react-router-dom";
 import {
   Sparkles, Send, MapPin, IndianRupee, Calendar, Users, ChevronRight,
   Hotel, Utensils, Camera, Loader2, Heart, Mountain, Palmtree, Baby,
   User, Shield, Backpack, CloudSun, AlertCircle, Save, Train, Plane, Bus, RefreshCw, Pencil, TramFront, Bike,
-  Car, Navigation, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Share2, XCircle, ShoppingBag, Printer
+  Car, Navigation, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Share2, XCircle, ShoppingBag, Printer, Download, Plus, X
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,7 +14,9 @@ import type { Json } from "@/integrations/supabase/types";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import Chatbot from "@/components/Chatbot";
 import PlanSkeleton from "@/pages/PlanSkeleton";
+import TripPDF from "@/components/TripPDF";
 import type { LocalTransportOption, TripActivity, TripDay, TripPlan, TravelOption } from "@/types/trip-plan";
+import { getPexelsImage } from "@/lib/pexels";
 
 interface Message {
   text: string;
@@ -32,7 +34,8 @@ const moods = [
 const PlanTrip = () => {
   const [searchParams] = useSearchParams();
   const initialQuery = searchParams.get("q") || "";
-  const [destination, setDestination] = useState(initialQuery);
+  const [destinations, setDestinations] = useState<string[]>(initialQuery ? [initialQuery] : [""]);
+  const destination = destinations.filter(d => d.trim()).join(" → ");
   const [isPlanning, setIsPlanning] = useState(false);
   const [activeMood, setActiveMood] = useState("adventure");
   const [plan, setPlan] = useState<TripPlan | null>(null);
@@ -51,9 +54,26 @@ const PlanTrip = () => {
 
   const { toast } = useToast();
   const { user } = useAuth();
-  
-  const handleDestinationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setDestination(e.target.value);
+  const pdfRef = useRef<HTMLDivElement>(null);
+
+  const handleDestinationChange = (index: number, value: string) => {
+    setDestinations(prev => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const addStop = () => {
+    if (destinations.length < 5) {
+      setDestinations(prev => [...prev, ""]);
+    }
+  };
+
+  const removeStop = (index: number) => {
+    if (destinations.length > 1) {
+      setDestinations(prev => prev.filter((_, i) => i !== index));
+    }
   };
 
   const handleSaveTrip = async () => {
@@ -104,6 +124,19 @@ const PlanTrip = () => {
     window.print();
   };
 
+  const handleDownloadPDF = async () => {
+    if (!pdfRef.current) return;
+    const html2pdf = (await import("html2pdf.js")).default;
+    const opt = {
+      margin: [10, 10, 10, 10] as [number, number, number, number],
+      filename: `${plan?.destination || destination || "trip"}-itinerary.pdf`,
+      image: { type: "jpeg" as const, quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const },
+    };
+    html2pdf().set(opt).from(pdfRef.current).save();
+  };
+
   const regeneratePlan = async (destination: string) => {
     setIsPlanning(true);
     setError("");
@@ -113,18 +146,18 @@ const PlanTrip = () => {
     ]);
 
     //if (!user) {
-      //setError("You are not logged in. Please sign in to plan a trip.");
-      //toast({ title: "Authentication Error", description: "You are not logged in.", variant: "destructive" });
-      //setIsPlanning(false);
-      //return;
+    //setError("You are not logged in. Please sign in to plan a trip.");
+    //toast({ title: "Authentication Error", description: "You are not logged in.", variant: "destructive" });
+    //setIsPlanning(false);
+    //return;
     //}
 
     //const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     //if (sessionError || !session) {
-      //setError("Your session may have expired. Please sign in again.");
-      //toast({ title: "Session Error", description: sessionError?.message || "Your session may have expired. Please sign in again.", variant: "destructive" });
-      //setIsPlanning(false);
-      //return;
+    //setError("Your session may have expired. Please sign in again.");
+    //toast({ title: "Session Error", description: sessionError?.message || "Your session may have expired. Please sign in again.", variant: "destructive" });
+    //setIsPlanning(false);
+    //return;
     //}
 
     try {
@@ -132,6 +165,7 @@ const PlanTrip = () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
           query: destination,
@@ -147,7 +181,31 @@ const PlanTrip = () => {
         throw new Error(errorData.error || `Server error: ${response.status}`);
       }
 
-      const data: TripPlan = await response.json();
+      let data: TripPlan = await response.json();
+
+      // Enrich images dynamically on the frontend to avoid duplicates
+      if (data.itinerary) {
+        data.itinerary = await Promise.all(
+          data.itinerary.map(async (day) => {
+            if (day.activities) {
+              const activities = await Promise.all(
+                day.activities.map(async (act) => {
+                  if (typeof act !== 'string') {
+                    const image = await getPexelsImage(
+                      act.imageSearchQuery || act.place || act.name || "travel destination"
+                    );
+                    return { ...act, image };
+                  }
+                  return act;
+                })
+              );
+              return { ...day, activities };
+            }
+            return day;
+          })
+        );
+      }
+
       setPlan(data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
@@ -167,25 +225,12 @@ const PlanTrip = () => {
     if (!plan || regeneratingDay !== null) return;
     setRegeneratingDay(dayIndex);
 
-    if (!user) {
-      toast({ title: "Authentication Error", description: "You are not logged in.", variant: "destructive" });
-      setRegeneratingDay(null);
-      return;
-    }
-
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session) {
-      toast({ title: "Session Error", description: sessionError?.message || "Your session may have expired. Please sign in again.", variant: "destructive" });
-      setRegeneratingDay(null);
-      return;
-    }
-
     try {
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
+          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
           existingPlan: plan,
@@ -244,7 +289,7 @@ const PlanTrip = () => {
   const budgetInfo = plan?.budgetHealth || null;
   const budgetUsagePercent = budgetInfo?.usagePercentage || 0;
   const budgetStatus = budgetInfo?.status || "";
-  
+
   const getStatusColor = () => {
     if (budgetStatus.includes("🟢") || budgetStatus.includes("Within")) return "text-emerald-500";
     if (budgetStatus.includes("🟡") || budgetStatus.includes("Near")) return "text-amber-500";
@@ -261,7 +306,7 @@ const PlanTrip = () => {
 
   const StatusIcon = getStatusIcon();
 
-  return ( 
+  return (
     <div className="px-5 md:container py-6 max-w-2xl mx-auto">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="font-display text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600">Let's Plan Your Next Adventure!</h1>
@@ -276,11 +321,10 @@ const PlanTrip = () => {
             <button
               key={m.id}
               onClick={() => setActiveMood(m.id)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
-                activeMood === m.id
-                  ? "gradient-hero text-primary-foreground shadow-card"
-                  : "bg-card text-muted-foreground hover:text-foreground shadow-card"
-              }`}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${activeMood === m.id
+                ? "gradient-hero text-primary-foreground shadow-card"
+                : "bg-card text-muted-foreground hover:text-foreground shadow-card"
+                }`}
             >
               <m.icon className="h-3.5 w-3.5" />
               {m.label}
@@ -295,14 +339,44 @@ const PlanTrip = () => {
           <div className="h-10 w-10 rounded-xl gradient-hero flex items-center justify-center flex-shrink-0">
             <Sparkles className="h-5 w-5 text-primary-foreground" />
           </div>
-          <div className="flex-1">
-            <input
-              value={destination}
-              onChange={handleDestinationChange}
-              placeholder='Enter a destination'
-              className="w-full bg-muted/50 rounded-xl px-3 py-2.5 text-sm outline-none resize-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 transition-shadow"
-            />
-            <p className="text-xs text-muted-foreground mt-1">e.g. Goa, Bali, etc.</p>
+          <div className="flex-1 space-y-2">
+            {destinations.map((dest, index) => (
+              <div key={index}>
+                {index > 0 && (
+                  <div className="flex items-center gap-2 py-1">
+                    <div className="h-px flex-1 bg-border" />
+                    <span className="text-[10px] font-bold text-primary uppercase tracking-wider">→ Stop {index + 1}</span>
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <input
+                    value={dest}
+                    onChange={(e) => handleDestinationChange(index, e.target.value)}
+                    placeholder={index === 0 ? 'Enter a destination' : 'Add next stop'}
+                    className="flex-1 bg-muted/50 rounded-xl px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 transition-shadow"
+                  />
+                  {destinations.length > 1 && (
+                    <button
+                      onClick={() => removeStop(index)}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      title="Remove stop"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            {destinations.length < 5 && (
+              <button
+                onClick={addStop}
+                className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors mt-1"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add Stop
+              </button>
+            )}
+            <p className="text-xs text-muted-foreground">e.g. Goa → Hampi → Coorg</p>
           </div>
         </div>
 
@@ -310,38 +384,38 @@ const PlanTrip = () => {
         <div className="grid grid-cols-3 gap-3 mt-4">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1">
-              <IndianRupee className="h-3 w-3" /> Budget 
+              <IndianRupee className="h-3 w-3" /> Budget
             </label>
-            <input 
-              type="number" 
-              value={budget} 
-              onChange={(e) => setBudget(e.target.value)} 
-              className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20" 
-              placeholder="15000" 
+            <input
+              type="number"
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="15000"
             />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1">
               <Calendar className="h-3 w-3" /> Days
             </label>
-            <input 
-              type="number" 
-              value={days} 
-              onChange={(e) => setDays(parseInt(e.target.value))} 
-              className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20" 
-              placeholder="3" 
+            <input
+              type="number"
+              value={days}
+              onChange={(e) => setDays(parseInt(e.target.value))}
+              className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="3"
             />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1">
               <Users className="h-3 w-3" /> Travelers
             </label>
-            <input 
-              type="number" 
-              value={travelers} 
-              onChange={(e) => setTravelers(parseInt(e.target.value))} 
-              className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20" 
-              placeholder="2" 
+            <input
+              type="number"
+              value={travelers}
+              onChange={(e) => setTravelers(parseInt(e.target.value))}
+              className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="2"
             />
           </div>
         </div>
@@ -395,8 +469,8 @@ const PlanTrip = () => {
             <div className="p-4 rounded-2xl bg-card shadow-card overflow-hidden">
               {plan.destinationImage ? (
                 <div className="relative -mx-4 -mt-4 mb-3 h-48 overflow-hidden">
-                  <img 
-                    src={plan.destinationImage} 
+                  <img
+                    src={plan.destinationImage}
                     alt={plan.destination}
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -415,6 +489,13 @@ const PlanTrip = () => {
                     <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{plan.summary}</p>
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
+                    <button
+                      onClick={handleDownloadPDF}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/80 transition-colors"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      PDF
+                    </button>
                     <button
                       onClick={handlePrintTrip}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/80 transition-colors"
@@ -521,11 +602,10 @@ const PlanTrip = () => {
                   <TrendingUp className="h-4 w-4 text-primary" />
                   <h3 className="font-display font-semibold text-foreground text-sm">Budget Health</h3>
                 </div>
-                <div className={`flex items-center gap-2 mb-3 p-2 rounded-lg ${
-                  budgetStatus.includes("🟢") || budgetStatus.includes("Within") ? "bg-emerald-500/10" :
+                <div className={`flex items-center gap-2 mb-3 p-2 rounded-lg ${budgetStatus.includes("🟢") || budgetStatus.includes("Within") ? "bg-emerald-500/10" :
                   budgetStatus.includes("🟡") || budgetStatus.includes("Near") ? "bg-amber-500/10" :
-                  "bg-red-500/10"
-                }`}>
+                    "bg-red-500/10"
+                  }`}>
                   <StatusIcon className={`h-5 w-5 ${getStatusColor()}`} />
                   <span className={`text-sm font-semibold ${getStatusColor()}`}>{budgetStatus}</span>
                 </div>
@@ -537,15 +617,14 @@ const PlanTrip = () => {
                     </span>
                   </div>
                   <div className="h-3 rounded-full bg-muted overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }} 
-                      animate={{ width: `${Math.min(budgetUsagePercent, 100)}%` }} 
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(budgetUsagePercent, 100)}%` }}
                       transition={{ delay: 0.3, duration: 0.6 }}
-                      className={`h-full rounded-full ${
-                        budgetUsagePercent <= 70 ? "bg-emerald-500" :
+                      className={`h-full rounded-full ${budgetUsagePercent <= 70 ? "bg-emerald-500" :
                         budgetUsagePercent <= 90 ? "bg-amber-500" :
-                        "bg-red-500"
-                      }`}
+                          "bg-red-500"
+                        }`}
                     />
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground">
@@ -621,7 +700,7 @@ const PlanTrip = () => {
                     const modeLower = opt.mode?.toLowerCase() || '';
                     const icon = modeLower.includes("train") ? Train
                       : modeLower.includes("flight") || modeLower.includes("fly") ? Plane
-                      : modeLower.includes("bus") ? Bus : Car;
+                        : modeLower.includes("bus") ? Bus : Car;
                     const Icon = icon;
                     const isBudget = modeLower.includes("bus") || modeLower.includes("train");
                     const route = opt.from && opt.to ? `${opt.from} to ${opt.to}` : 'N/A';
@@ -698,8 +777,8 @@ const PlanTrip = () => {
                     {/* Day Hero Image from AI */}
                     {day.heroImage && (
                       <div className="relative mb-3 h-40 overflow-hidden group">
-                        <img 
-                          src={day.heroImage} 
+                        <img
+                          src={day.heroImage}
                           alt={day.title}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                           onError={(e) => {
@@ -711,7 +790,7 @@ const PlanTrip = () => {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <div className="h-9 w-9 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
-                                  <span className="text-lg font-bold text-white">{day.day}</span>
+                                <span className="text-lg font-bold text-white">{day.day}</span>
                               </div>
                               <div>
                                 <p className="text-xs text-white/80">Day {day.day}</p>
@@ -760,11 +839,11 @@ const PlanTrip = () => {
                           </button>
                         </div>
                       )}
-                      
+
                       {/* Activities with Images from AI */}
                       <div className="space-y-2">
                         {day.activities && Array.isArray(day.activities) && day.activities.map((activity: TripActivity | string, j: number) => (
-                          <motion.div 
+                          <motion.div
                             key={j}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
@@ -773,8 +852,8 @@ const PlanTrip = () => {
                             {typeof activity !== 'string' && activity.image ? (
                               <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors">
                                 <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
-                                  <img 
-                                    src={activity.image} 
+                                  <img
+                                    src={activity.image}
                                     alt={activity.name || activity.place}
                                     className="w-full h-full object-cover"
                                     onError={(e) => {
@@ -891,6 +970,13 @@ const PlanTrip = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Hidden PDF content for export */}
+      {plan && (
+        <div style={{ position: "absolute", left: "-9999px", top: 0 }}>
+          <TripPDF ref={pdfRef} plan={plan} destination={destination} />
+        </div>
+      )}
     </div>
   );
 };

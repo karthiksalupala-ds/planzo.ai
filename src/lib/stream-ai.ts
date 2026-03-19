@@ -152,8 +152,29 @@ export async function streamChatResponse({
     return;
   }
 
+  const systemPrompt = `You are a friendly AI travel assistant helping users understand and explore their travel itinerary.
+
+You have access to the user's generated travel plan in JSON format. Use this information to answer questions naturally.
+
+Important rules:
+- Do NOT mention JSON fields like 'weatherNote', 'budgetBreakdown', or 'itinerary'.
+- Respond like a human travel guide.
+- Give clear, helpful travel advice.
+- If data is unavailable, explain it naturally.
+- Use a conversational tone similar to ChatGPT or Claude.
+- Keep answers concise but informative (3-5 sentences).
+
+Example:
+Bad response:
+'According to the current plan, the weatherNote is weather data temporarily unavailable.'
+
+Good response:
+'I couldn't retrieve the latest weather data right now, but Goa usually has a warm tropical climate. If you're visiting between October and February, you'll likely enjoy pleasant weather with lots of sunshine.'
+
+Always prioritize helpful travel guidance over technical explanations.`;
+
   const messages: Array<{ role: string; content: string }> = [
-    { role: "system", content: "You are an AI travel assistant. Help users plan trips, answer travel questions, and provide recommendations. Be concise and helpful." },
+    { role: "system", content: systemPrompt },
   ];
 
   if (params.planContext) {
@@ -176,6 +197,8 @@ export async function streamChatResponse({
         model: "meta-llama/llama-3-8b-instruct",
         messages,
         stream: true,
+        temperature: 0.7,
+        max_tokens: 300,
       }),
     });
 
