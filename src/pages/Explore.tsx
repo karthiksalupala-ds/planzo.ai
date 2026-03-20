@@ -1,23 +1,39 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Search, MapPin, Star, Filter, IndianRupee } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Search, MapPin, Star, Filter, IndianRupee, X, SortAsc, TrendingUp, ArrowUpDown } from "lucide-react";
 import { indianDestinations } from "@/data/destinations";
 
 const filterTags = ["All", "Culture", "Beach", "Nature", "Adventure", "Romantic"];
+const sortOptions = [
+  { label: "Default", value: "default" },
+  { label: "Rating (High–Low)", value: "rating_desc" },
+  { label: "Price (Low–High)", value: "price_asc" },
+  { label: "Price (High–Low)", value: "price_desc" },
+];
 
 const Explore = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
+  const [sortBy, setSortBy] = useState("default");
+  const [showSortPanel, setShowSortPanel] = useState(false);
   const navigate = useNavigate();
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  const filtered = indianDestinations.filter((d) => {
-    const matchesSearch =
-      d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      d.state.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = activeFilter === "All" || d.category === activeFilter;
-    return matchesSearch && matchesFilter;
-  });
+  const filtered = indianDestinations
+    .filter((d) => {
+      const matchesSearch =
+        d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        d.state.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesFilter = activeFilter === "All" || d.category === activeFilter;
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => {
+      if (sortBy === "rating_desc") return b.rating - a.rating;
+      if (sortBy === "price_asc") return parseInt(a.price.replace(/\D/g, "")) - parseInt(b.price.replace(/\D/g, ""));
+      if (sortBy === "price_desc") return parseInt(b.price.replace(/\D/g, "")) - parseInt(a.price.replace(/\D/g, ""));
+      return 0;
+    });
 
   return (
     <div className="px-5 md:container py-6">
@@ -26,22 +42,59 @@ const Explore = () => {
         <p className="text-sm text-muted-foreground mt-1">Discover incredible destinations across India</p>
       </motion.div>
 
-      {/* Search */}
+      {/* Search + Filter */}
       <div className="flex items-center gap-2 mt-5">
         <div className="flex-1 flex items-center gap-2 px-4 py-3 rounded-xl bg-card shadow-card">
-          <Search className="h-4 w-4 text-muted-foreground" />
+          <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           <input
+            ref={searchRef}
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search Indian destinations..."
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery("")} className="text-muted-foreground hover:text-foreground transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
-        <button className="p-3 rounded-xl bg-card shadow-card text-muted-foreground hover:text-foreground transition-colors">
-          <Filter className="h-4 w-4" />
+        <button
+          onClick={() => setShowSortPanel(!showSortPanel)}
+          className={`p-3 rounded-xl shadow-card transition-colors ${showSortPanel ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground"}`}
+          title="Sort & Filter"
+        >
+          <ArrowUpDown className="h-4 w-4" />
         </button>
       </div>
+
+      {/* Sort panel */}
+      <AnimatePresence>
+        {showSortPanel && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-3 p-4 rounded-xl bg-card shadow-card overflow-hidden"
+          >
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
+              <SortAsc className="h-3 w-3" /> Sort by
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {sortOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => { setSortBy(opt.value); setShowSortPanel(false); }}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${sortBy === opt.value ? "gradient-hero text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Filter Tags */}
       <div className="flex gap-2 mt-4 overflow-x-auto scrollbar-hide pb-1">
@@ -60,14 +113,22 @@ const Explore = () => {
         ))}
       </div>
 
+      {/* Results count */}
+      {(searchQuery || activeFilter !== "All") && (
+        <p className="text-xs text-muted-foreground mt-3 mb-1">
+          {filtered.length} {filtered.length === 1 ? "destination" : "destinations"} found
+          {sortBy !== "default" && <span className="ml-2 text-primary font-medium flex-inline items-center gap-1"><TrendingUp className="h-3 w-3 inline-block mr-0.5" />{sortOptions.find(s => s.value === sortBy)?.label}</span>}
+        </p>
+      )}
+
       {/* Results */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
         {filtered.map((d, i) => (
           <motion.div
             key={d.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.08 }}
+            transition={{ delay: i * 0.05 }}
             onClick={() => navigate(`/destination/${d.id}`)}
             className="group bg-card rounded-2xl shadow-card overflow-hidden hover:shadow-elevated transition-shadow cursor-pointer"
           >
@@ -113,8 +174,15 @@ const Explore = () => {
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">No destinations found. Try a different search.</p>
+        <div className="text-center py-16">
+          <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+            <Search className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <p className="font-semibold text-foreground">No destinations found</p>
+          <p className="text-sm text-muted-foreground mt-1">Try a different search or filter</p>
+          <button onClick={() => { setSearchQuery(""); setActiveFilter("All"); }} className="mt-3 text-sm font-semibold text-primary hover:underline">
+            Clear filters
+          </button>
         </div>
       )}
     </div>

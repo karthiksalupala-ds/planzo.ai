@@ -219,7 +219,7 @@ const DestinationDetail = () => {
           className="mt-8"
         >
           <button
-            onClick={() => navigate(`/plan?q=Plan a ${destination.days} trip to ${destination.name} under ${destination.price}`)}
+            onClick={() => navigate(`/plan?dest=${destination.name}&days=${parseInt(destination.days)}&budget=${parseInt(destination.price.replace(/\\D/g, ""))}`)}
             className="w-full py-4 rounded-2xl gradient-hero text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-elevated"
           >
             Plan Trip to {destination.name.split(",")[0]}

@@ -40,11 +40,14 @@ const TripExpenses = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [coaching, setCoaching] = useState<ExpenseCoaching | null>(null);
   const [coachLoading, setCoachLoading] = useState(false);
+  const [coachCooldown, setCoachCooldown] = useState(false);
+  const [coachCooldownSeconds, setCoachCooldownSeconds] = useState(0);
 
   // New expense form
   const [newCategory, setNewCategory] = useState("food");
   const [newAmount, setNewAmount] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0]);
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
@@ -86,6 +89,7 @@ const TripExpenses = () => {
       category: newCategory,
       amount: parseFloat(newAmount),
       description: newDesc || undefined,
+      expense_date: newDate,
     }).select().single();
     setAdding(false);
     if (error) {
@@ -103,11 +107,12 @@ const TripExpenses = () => {
   };
 
   const getCoaching = async () => {
-    if (!trip) return;
+    if (!trip || coachCooldown) return;
     setCoachLoading(true);
     setCoaching(null);
 
-    const plannedBudget = trip.plan_data?.budget || {};
+    // Use budgetHealth.userBudget — the correct field in TripPlan
+    const plannedBudget = trip.plan_data?.budgetHealth || {};
     const actualByCategory: Record<string, number> = {};
     expenses.forEach((e) => {
       actualByCategory[e.category] = (actualByCategory[e.category] || 0) + Number(e.amount);
@@ -128,10 +133,20 @@ const TripExpenses = () => {
       toast({ title: "Coach Error", description: "Could not get coaching tips.", variant: "destructive" });
     } else {
       setCoaching(data);
+      // 60-second cooldown to prevent API spam
+      setCoachCooldown(true);
+      let remaining = 60;
+      setCoachCooldownSeconds(remaining);
+      const interval = setInterval(() => {
+        remaining -= 1;
+        setCoachCooldownSeconds(remaining);
+        if (remaining <= 0) { clearInterval(interval); setCoachCooldown(false); }
+      }, 1000);
     }
   };
 
   const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  const plannedBudget = trip?.plan_data?.budgetHealth?.userBudget || trip?.budget || 0;
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
@@ -163,10 +178,15 @@ const TripExpenses = () => {
               <IndianRupee className="h-5 w-5" />{totalSpent.toLocaleString("en-IN")}
             </p>
           </div>
-          {trip.plan_data?.budget?.total && (
+          {plannedBudget > 0 && (
             <div className="text-right">
-              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Planned</p>
-              <p className="text-lg font-semibold text-primary">{trip.plan_data.budget.total}</p>
+              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Planned Budget</p>
+              <p className="text-lg font-semibold text-primary">₹{Number(plannedBudget).toLocaleString("en-IN")}</p>
+              {totalSpent > Number(plannedBudget) ? (
+                <p className="text-[10px] text-destructive font-semibold">Over by ₹{(totalSpent - Number(plannedBudget)).toLocaleString("en-IN")}</p>
+              ) : (
+                <p className="text-[10px] text-emerald-500 font-semibold">₹{(Number(plannedBudget) - totalSpent).toLocaleString("en-IN")} remaining</p>
+              )}
             </div>
           )}
         </div>
@@ -201,10 +221,14 @@ const TripExpenses = () => {
         <button onClick={() => setShowAdd(!showAdd)} className="flex-1 py-3 rounded-xl gradient-hero text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
           <Plus className="h-4 w-4" /> Add Expense
         </button>
-        <button onClick={getCoaching} disabled={coachLoading || expenses.length === 0}
-          className="px-4 py-3 rounded-xl bg-card shadow-card text-foreground font-semibold text-sm flex items-center gap-2 hover:bg-muted/50 transition-colors disabled:opacity-50">
+        <button
+          onClick={getCoaching}
+          disabled={coachLoading || expenses.length === 0 || coachCooldown}
+          className="px-4 py-3 rounded-xl bg-card shadow-card text-foreground font-semibold text-sm flex items-center gap-2 hover:bg-muted/50 transition-colors disabled:opacity-50"
+          title={coachCooldown ? `Available in ${coachCooldownSeconds}s` : "Get AI spending analysis"}
+        >
           {coachLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-primary" />}
-          AI Coach
+          {coachCooldown ? `${coachCooldownSeconds}s` : "AI Coach"}
         </button>
       </motion.div>
 
@@ -229,6 +253,10 @@ const TripExpenses = () => {
             <div className="flex flex-col gap-1 mt-3">
               <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Description (optional)</label>
               <input type="text" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none" placeholder="e.g. Biryani at Paradise" />
+            </div>
+            <div className="flex flex-col gap-1 mt-3">
+              <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Date</label>
+              <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none" />
             </div>
             <button onClick={addExpense} disabled={adding || !newAmount} className="w-full mt-3 py-2.5 rounded-xl gradient-hero text-primary-foreground font-semibold text-sm disabled:opacity-50">
               {adding ? "Adding..." : "Save Expense"}

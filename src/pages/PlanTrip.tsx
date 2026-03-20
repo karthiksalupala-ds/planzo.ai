@@ -18,7 +18,8 @@ import TripPDF from "@/components/TripPDF";
 import type { LocalTransportOption, TripActivity, TripDay, TripPlan, TravelOption } from "@/types/trip-plan";
 import { getPexelsImage } from "@/lib/pexels";
 import InteractiveMap from "@/components/InteractiveMap";
-import { generateAlternativeActivity, streamTripPlan } from "@/lib/stream-ai";
+import { generateAlternativeActivity } from "@/lib/stream-ai";
+import { indianDestinations } from "@/data/destinations";
 
 interface Message {
   text: string;
@@ -58,10 +59,13 @@ const PlanTrip = () => {
     return `🚗 ~${time} min from previous location`;
   };
   // ----------------------
-  const initialQuery = searchParams.get("q") || "";
+  // ----------------------
+  const initialDest = searchParams.get("dest") || searchParams.get("q") || "";
+  const initialDays = searchParams.get("days");
+  const initialBudget = searchParams.get("budget");
   const tripIdParam = searchParams.get("id");
   const [tripId, setTripId] = useState<string | null>(tripIdParam);
-  const [destinations, setDestinations] = useState<string[]>(initialQuery ? [initialQuery] : [""]);
+  const [destinations, setDestinations] = useState<string[]>(initialDest ? [initialDest] : [""]);
   const destination = destinations.filter(d => d.trim()).join(" → ");
   const [isPlanning, setIsPlanning] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -78,9 +82,33 @@ const PlanTrip = () => {
   ]);
 
   // Budget state
-  const [budget, setBudget] = useState("15000");
-  const [days, setDays] = useState(3);
+  const [budget, setBudget] = useState(initialBudget || "15000");
+  const [days, setDays] = useState(initialDays ? parseInt(initialDays) : 3);
   const [travelers, setTravelers] = useState(2);
+
+  // Destination autocomplete
+  const [autocompleteIndex, setAutocompleteIndex] = useState<number | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  const handleDestinationChangeWithSuggest = (index: number, value: string) => {
+    handleDestinationChange(index, value);
+    setAutocompleteIndex(index);
+    if (value.trim().length > 1) {
+      const matches = indianDestinations
+        .filter(d => d.name.toLowerCase().includes(value.toLowerCase()) || d.state.toLowerCase().includes(value.toLowerCase()))
+        .slice(0, 5)
+        .map(d => d.name);
+      setSuggestions(matches);
+    } else {
+      setSuggestions([]);
+    }
+  };
+
+  const handleSuggestionClick = (index: number, name: string) => {
+    handleDestinationChange(index, name);
+    setSuggestions([]);
+    setAutocompleteIndex(null);
+  };
 
   const updateRemotePlan = async (updatedPlan: TripPlan) => {
     if (tripId) {
@@ -236,27 +264,17 @@ const PlanTrip = () => {
       { text: "Hello! I'm your AI trip assistant. Ask me anything about your plan.", isUser: false },
     ]);
 
-    //if (!user) {
-    //setError("You are not logged in. Please sign in to plan a trip.");
-    //toast({ title: "Authentication Error", description: "You are not logged in.", variant: "destructive" });
-    //setIsPlanning(false);
-    //return;
-    //}
-
-    //const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    //if (sessionError || !session) {
-    //setError("Your session may have expired. Please sign in again.");
-    //toast({ title: "Session Error", description: sessionError?.message || "Your session may have expired. Please sign in again.", variant: "destructive" });
-    //setIsPlanning(false);
-    //return;
-    //}
-
     try {
+      // Get the current session for a valid JWT token
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          "Authorization": `Bearer ${token}`,
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({
           query: destination,
@@ -315,16 +333,28 @@ const PlanTrip = () => {
     await regeneratePlan(destination);
   };
 
+  const handleDestinationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && destination.trim() && !isPlanning) {
+      setSuggestions([]);
+      handlePlan();
+    }
+  };
+
   const handleRegenerateDay = async (dayIndex: number) => {
     if (!plan || regeneratingDay !== null) return;
     setRegeneratingDay(dayIndex);
 
     try {
+      // Get the current session for a valid JWT token
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          "Authorization": `Bearer ${token}`,
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({
           existingPlan: plan,
@@ -501,7 +531,7 @@ const PlanTrip = () => {
           </div>
           <div className="flex-1 space-y-2">
             {destinations.map((dest, index) => (
-              <div key={index}>
+              <div key={index} className="relative">
                 {index > 0 && (
                   <div className="flex items-center gap-2 py-1">
                     <div className="h-px flex-1 bg-border" />
@@ -512,9 +542,12 @@ const PlanTrip = () => {
                 <div className="flex items-center gap-2">
                   <input
                     value={dest}
-                    onChange={(e) => handleDestinationChange(index, e.target.value)}
-                    placeholder={index === 0 ? 'Enter a destination' : 'Add next stop'}
+                    onChange={(e) => handleDestinationChangeWithSuggest(index, e.target.value)}
+                    onKeyDown={handleDestinationKeyDown}
+                    onBlur={() => setTimeout(() => { setSuggestions([]); setAutocompleteIndex(null); }, 150)}
+                    placeholder={index === 0 ? 'Enter a destination (e.g. Goa)' : 'Add next stop'}
                     className="flex-1 bg-muted/50 rounded-xl px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 transition-shadow"
+                    autoComplete="off"
                   />
                   {destinations.length > 1 && (
                     <button
@@ -526,6 +559,21 @@ const PlanTrip = () => {
                     </button>
                   )}
                 </div>
+                {/* Autocomplete dropdown */}
+                {autocompleteIndex === index && suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-card border border-border rounded-xl shadow-elevated overflow-hidden">
+                    {suggestions.map((s) => (
+                      <button
+                        key={s}
+                        onMouseDown={() => handleSuggestionClick(index, s)}
+                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted/60 transition-colors flex items-center gap-2"
+                      >
+                        <MapPin className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
             {destinations.length < 5 && (
@@ -544,11 +592,12 @@ const PlanTrip = () => {
         <div className="grid grid-cols-3 gap-3 mt-4">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1">
-              <IndianRupee className="h-3 w-3" /> Budget
+              <IndianRupee className="h-3 w-3" /> Budget (₹)
             </label>
             <input
               type="number"
               value={budget}
+              min={500}
               onChange={(e) => setBudget(e.target.value)}
               className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
               placeholder="15000"
@@ -561,7 +610,9 @@ const PlanTrip = () => {
             <input
               type="number"
               value={days}
-              onChange={(e) => setDays(parseInt(e.target.value))}
+              min={1}
+              max={30}
+              onChange={(e) => setDays(Math.min(30, Math.max(1, parseInt(e.target.value) || 1)))}
               className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
               placeholder="3"
             />
@@ -573,7 +624,9 @@ const PlanTrip = () => {
             <input
               type="number"
               value={travelers}
-              onChange={(e) => setTravelers(parseInt(e.target.value))}
+              min={1}
+              max={20}
+              onChange={(e) => setTravelers(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
               className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
               placeholder="2"
             />
@@ -587,6 +640,12 @@ const PlanTrip = () => {
             <><Send className="h-4 w-4" />Generate Itinerary</>
           )}
         </button>
+        {!user && (
+          <p className="text-center text-[11px] text-muted-foreground mt-2">
+            <User className="h-3 w-3 inline-block mr-1" />
+            <button onClick={() => window.location.href = '/auth'} className="text-primary font-semibold hover:underline">Sign in</button> to save & share your trips
+          </p>
+        )}
       </motion.div>
 
       {/* Error State */}

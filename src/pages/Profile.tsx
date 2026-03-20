@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { User, Settings, Heart, MapPin, Star, LogOut, ChevronRight, Bookmark, Globe, Loader2, Map, Trash2, Receipt } from "lucide-react";
+import { User, Settings, Heart, MapPin, Star, LogOut, ChevronRight, Bookmark, Globe, Loader2, Map, Trash2, Receipt, ExternalLink } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,10 +11,10 @@ type ProfileRow = Tables<"profiles">;
 type SavedTripRow = Tables<"saved_trips">;
 
 const menuItems = [
-  { icon: Bookmark, label: "Saved Trips" },
-  { icon: Heart, label: "Wishlist" },
-  { icon: Globe, label: "Language" },
-  { icon: Settings, label: "Settings" },
+  { icon: Bookmark, label: "Saved Trips", action: "trips" },
+  { icon: Heart, label: "Wishlist", action: "wishlist" },
+  { icon: Globe, label: "Language", action: "language" },
+  { icon: Settings, label: "Settings", action: "settings" },
 ];
 
 const Profile = () => {
@@ -23,7 +23,7 @@ const Profile = () => {
   const { toast } = useToast();
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [savedTrips, setSavedTrips] = useState<SavedTripRow[]>([]);
-  const [showTrips, setShowTrips] = useState(false);
+  const [showTrips, setShowTrips] = useState(true); // expanded by default
 
   useEffect(() => {
     if (!loading && !user) {
@@ -53,6 +53,11 @@ const Profile = () => {
     toast({ title: "Trip deleted" });
   };
 
+  const handleMenuAction = (action: string) => {
+    if (action === "trips") setShowTrips(!showTrips);
+    else toast({ title: "Coming soon", description: "This feature is under construction.", variant: "default" });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -64,15 +69,24 @@ const Profile = () => {
   if (!user) return null;
 
   const displayName = profile?.display_name || user.user_metadata?.display_name || "Traveler";
+  const avatarUrl = user.user_metadata?.avatar_url as string | undefined;
   const travelStyle = profile?.travel_style?.length ? profile.travel_style : ["Adventure", "Budget", "Food Lover", "Culture"];
 
   return (
     <div className="px-5 md:container py-6 max-w-lg mx-auto">
       {/* Profile Header */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center text-center">
-        <div className="h-20 w-20 rounded-full gradient-hero flex items-center justify-center shadow-elevated">
-          <User className="h-10 w-10 text-primary-foreground" />
-        </div>
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt={displayName}
+            className="h-20 w-20 rounded-full object-cover shadow-elevated ring-4 ring-primary/20"
+          />
+        ) : (
+          <div className="h-20 w-20 rounded-full gradient-hero flex items-center justify-center shadow-elevated">
+            <User className="h-10 w-10 text-primary-foreground" />
+          </div>
+        )}
         <h1 className="font-display text-xl font-bold text-foreground mt-3">{displayName}</h1>
         <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
           <MapPin className="h-3 w-3" />
@@ -103,7 +117,7 @@ const Profile = () => {
         </div>
       </motion.div>
 
-      {/* Saved Trips */}
+      {/* Saved Trips — expanded by default */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="mt-6">
         <button onClick={() => setShowTrips(!showTrips)} className="flex items-center justify-between w-full text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           <span className="flex items-center gap-1"><Map className="h-3 w-3" /> Saved Trips ({savedTrips.length})</span>
@@ -112,7 +126,10 @@ const Profile = () => {
         {showTrips && (
           <div className="space-y-2">
             {savedTrips.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No saved trips yet. Go plan one!</p>
+              <div className="py-6 text-center">
+                <p className="text-sm text-muted-foreground">No saved trips yet.</p>
+                <button onClick={() => navigate("/plan")} className="mt-2 text-xs font-semibold text-primary hover:underline">Plan your first trip →</button>
+              </div>
             ) : savedTrips.map((trip) => (
               <div key={trip.id} className="flex items-center gap-3 p-3 rounded-xl bg-card shadow-card">
                 <div className="h-9 w-9 rounded-lg gradient-hero flex items-center justify-center flex-shrink-0">
@@ -122,6 +139,10 @@ const Profile = () => {
                   <p className="text-sm font-semibold text-foreground truncate">{trip.title}</p>
                   <p className="text-[10px] text-muted-foreground">{trip.mood} · {trip.days} days · {new Date(trip.created_at).toLocaleDateString()}</p>
                 </div>
+                {/* Open trip in planner */}
+                <button onClick={() => navigate(`/plan?id=${trip.id}`)} className="text-muted-foreground hover:text-primary transition-colors" title="Open Trip">
+                  <ExternalLink className="h-4 w-4" />
+                </button>
                 <button onClick={() => navigate(`/trip/${trip.id}/expenses`)} className="text-muted-foreground hover:text-primary transition-colors" title="Track Expenses">
                   <Receipt className="h-4 w-4" />
                 </button>
@@ -137,7 +158,11 @@ const Profile = () => {
       {/* Menu */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-6 rounded-2xl bg-card shadow-card overflow-hidden">
         {menuItems.map((item, i) => (
-          <button key={item.label} className={`flex items-center gap-3 w-full px-4 py-3.5 text-sm text-foreground hover:bg-muted/50 transition-colors ${i !== menuItems.length - 1 ? "border-b border-border" : ""}`}>
+          <button
+            key={item.label}
+            onClick={() => handleMenuAction(item.action)}
+            className={`flex items-center gap-3 w-full px-4 py-3.5 text-sm text-foreground hover:bg-muted/50 transition-colors ${i !== menuItems.length - 1 ? "border-b border-border" : ""}`}
+          >
             <item.icon className="h-4 w-4 text-muted-foreground" />
             <span className="flex-1 text-left font-medium">{item.label}</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />

@@ -57,6 +57,38 @@ const famousHotels = [
     image: "https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?q=80&w=2070&auto=format&fit=crop",
     rating: 4.6,
     price: "₹18,000"
+  },
+  {
+    id: 5,
+    name: "Taj Lake Palace",
+    location: "Udaipur",
+    image: "https://images.unsplash.com/photo-1596178065887-1198b6148b2b?q=80&w=2070&auto=format&fit=crop",
+    rating: 4.9,
+    price: "₹35,000"
+  },
+  {
+    id: 6,
+    name: "The Oberoi Amarvilas",
+    location: "Agra",
+    image: "https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=2070&auto=format&fit=crop",
+    rating: 4.8,
+    price: "₹40,000"
+  },
+  {
+    id: 7,
+    name: "Umaid Bhawan Palace",
+    location: "Jodhpur",
+    image: "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?q=80&w=2070&auto=format&fit=crop",
+    rating: 4.9,
+    price: "₹45,000"
+  },
+  {
+    id: 8,
+    name: "ITC Grand Chola",
+    location: "Chennai",
+    image: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=2070&auto=format&fit=crop",
+    rating: 4.7,
+    price: "₹15,000"
   }
 ];
 
@@ -71,7 +103,7 @@ const topFoods = [
     id: 2,
     name: "Vada Pav",
     location: "Mumbai",
-    image: "https://images.unsplash.com/photo-1603208776066-2422643a5324?q=80&w=2070&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1601050690597-df0568f70950?q=80&w=2070&auto=format&fit=crop",
   },
   {
     id: 3,
@@ -83,7 +115,31 @@ const topFoods = [
     id: 4,
     name: "Masala Dosa",
     location: "South India",
-    image: "https://images.unsplash.com/photo-1668236543090-d2f89695343e?q=80&w=1888&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?q=80&w=2070&auto=format&fit=crop",
+  },
+  {
+    id: 5,
+    name: "Amritsari Kulcha",
+    location: "Punjab",
+    image: "https://images.unsplash.com/photo-1626779848520-216962f3aabe?q=80&w=2070&auto=format&fit=crop",
+  },
+  {
+    id: 6,
+    name: "Rogan Josh",
+    location: "Kashmir",
+    image: "https://images.unsplash.com/photo-1585937421612-70a008356236?q=80&w=1986&auto=format&fit=crop",
+  },
+  {
+    id: 7,
+    name: "Dhokla",
+    location: "Gujarat",
+    image: "https://images.unsplash.com/photo-1626132647523-66f5bf380027?q=80&w=2072&auto=format&fit=crop",
+  },
+  {
+    id: 8,
+    name: "Litti Chokha",
+    location: "Bihar",
+    image: "https://images.unsplash.com/photo-1606491956689-2ea866880c84?q=80&w=2021&auto=format&fit=crop",
   }
 ];
 
@@ -112,6 +168,21 @@ const popularActivities = [
     id: 5,
     name: "River Rafting",
     image: "https://images.unsplash.com/photo-1530866495561-507c9faab2ed?q=80&w=1976&auto=format&fit=crop",
+  },
+  {
+    id: 6,
+    name: "Skiing",
+    image: "https://images.unsplash.com/photo-1551524559-8af4e6624178?q=80&w=2026&auto=format&fit=crop",
+  },
+  {
+    id: 7,
+    name: "Hot Air Ballooning",
+    image: "https://images.unsplash.com/photo-1528629297340-d1d466945dc5?q=80&w=2022&auto=format&fit=crop",
+  },
+  {
+    id: 8,
+    name: "Surfing",
+    image: "https://images.unsplash.com/photo-1502680390469-be75c86b636f?q=80&w=2070&auto=format&fit=crop",
   }
 ];
 
@@ -168,7 +239,7 @@ const CommunityTicker = () => {
   ];
   return (
     <div className="w-full bg-primary/10 border-b border-primary/20 py-3 overflow-hidden flex items-center relative z-20 backdrop-blur-md shadow-sm">
-      <motion.div 
+      <motion.div
         animate={{ x: ["0%", "-50%"] }}
         transition={{ repeat: Infinity, duration: 45, ease: "linear" }}
         className="flex whitespace-nowrap gap-16 text-xs md:text-sm font-bold text-primary/90 shrink-0 w-max pr-16"
@@ -193,18 +264,18 @@ const Index = () => {
       {/* Hero */}
       <section className="relative h-[480px] md:h-[650px] overflow-hidden flex flex-col justify-center">
         {/* Cinematic Video Background */}
-        <video 
-          autoPlay 
-          loop 
-          muted 
-          playsInline 
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
           className="absolute inset-0 h-full w-full object-cover scale-105"
         >
-          <source src="https://vjs.zencdn.net/v/oceans.mp4" type="video/mp4" />
-          {/* Fallback image if video fails to load */}
+          <source src="https://videos.pexels.com/video-files/1409899/1409899-hd_1920_1080_25fps.mp4" type="video/mp4" />
+          {/* Fallback — Shimla mountains, royalty-free */}
         </video>
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-background z-10" />
-        
+
         <div className="relative z-20 px-5 md:container w-full h-full flex flex-col justify-center items-center text-center mt-12">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -218,12 +289,12 @@ const Index = () => {
                 AI-Powered Travel Intelligence
               </span>
             </div>
-            
+
             <h1 className="font-display text-4xl md:text-6xl lg:text-7xl font-bold text-white leading-tight drop-shadow-xl tracking-tight mb-4">
               Plan incredible trips <br className="hidden md:block" />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-300 to-sky-300">in seconds.</span>
             </h1>
-            
+
             <p className="text-sm md:text-lg text-white/90 max-w-2xl font-medium drop-shadow-md mb-10">
               Discover hidden gems, instantly craft perfect itineraries, and explore India like never before. Tell us your vibe, and our AI does the rest.
             </p>
@@ -232,6 +303,11 @@ const Index = () => {
               <AISearchBar />
             </div>
           </motion.div>
+        </div>
+        {/* Scroll down cue */}
+        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1 animate-bounce">
+          <span className="text-white/60 text-[10px] font-semibold uppercase tracking-widest">Scroll</span>
+          <svg className="h-4 w-4 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
         </div>
       </section>
 
@@ -300,7 +376,7 @@ const Index = () => {
         <h2 className="font-display text-lg font-bold text-foreground mb-4">
           Quick Access
         </h2>
-        <motion.div 
+        <motion.div
           variants={containerVariants}
           initial="hidden"
           whileInView="visible"
@@ -309,7 +385,16 @@ const Index = () => {
         >
           {smartCards.map((card, i) => (
             <motion.div key={card.title} variants={itemVariants}>
-              <SmartCard {...card} index={i} />
+              <SmartCard
+                {...card}
+                index={i}
+                onClick={() => {
+                  if (card.title === "Top Places") navigate("/explore");
+                  else if (card.title === "Itinerary") navigate("/plan");
+                  else if (card.title === "Food Spots") navigate("/explore");
+                  else navigate("/explore");
+                }}
+              />
             </motion.div>
           ))}
         </motion.div>
@@ -334,6 +419,7 @@ const Index = () => {
               whileInView={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.1 }}
               viewport={{ once: true }}
+              onClick={() => navigate(`/plan?dest=${hotel.location}`)}
               className="flex-shrink-0 w-64 group cursor-pointer"
             >
               <div className="relative h-40 rounded-2xl overflow-hidden mb-3">
@@ -374,6 +460,7 @@ const Index = () => {
               whileInView={{ opacity: 1, scale: 1 }}
               transition={{ delay: i * 0.05 }}
               viewport={{ once: true }}
+              onClick={() => navigate(`/plan?dest=${food.location}`)}
               className="relative h-32 rounded-2xl overflow-hidden group cursor-pointer"
             >
               <img src={food.image} alt={food.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
@@ -406,6 +493,7 @@ const Index = () => {
               whileInView={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.1 }}
               viewport={{ once: true }}
+              onClick={() => navigate(`/plan`)}
               className="flex-shrink-0 w-40 group cursor-pointer"
             >
               <div className="relative h-56 rounded-2xl overflow-hidden mb-2 shadow-card">
