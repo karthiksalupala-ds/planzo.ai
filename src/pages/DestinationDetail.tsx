@@ -1,15 +1,83 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Star, MapPin, Calendar, IndianRupee, Clock, Utensils,
-  Mountain, Share2, Heart, Navigation
+  Mountain, Share2, Heart, Navigation, Plus, Send, User
 } from "lucide-react";
 import { indianDestinations } from "@/data/destinations";
+import { useToast } from "@/hooks/use-toast";
+
+interface Review {
+  id: string;
+  name: string;
+  rating: number;
+  text: string;
+  date: string;
+}
 
 const DestinationDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const destination = indianDestinations.find((d) => d.id === id);
+
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewName, setReviewName] = useState("");
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
+  const [isWishlisted, setIsWishlisted] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    // Load reviews from localStorage
+    const stored = localStorage.getItem(`reviews_${id}`);
+    if (stored) {
+      try { setReviews(JSON.parse(stored)); } catch {}
+    }
+    // Check wishlist
+    try {
+      const wl = JSON.parse(localStorage.getItem("planzo_wishlist") || "[]");
+      setIsWishlisted(wl.includes(id));
+    } catch {}
+  }, [id]);
+
+  const handleSubmitReview = () => {
+    if (!reviewName.trim() || !reviewText.trim()) {
+      toast({ title: "Fill in all fields", variant: "destructive" });
+      return;
+    }
+    const review: Review = {
+      id: crypto.randomUUID(),
+      name: reviewName.trim(),
+      rating: reviewRating,
+      text: reviewText.trim(),
+      date: new Date().toISOString(),
+    };
+    const updated = [review, ...reviews];
+    setReviews(updated);
+    localStorage.setItem(`reviews_${id}`, JSON.stringify(updated));
+    setShowReviewForm(false);
+    setReviewName("");
+    setReviewText("");
+    setReviewRating(5);
+    toast({ title: "Review submitted! ⭐", description: "Thanks for sharing your experience." });
+  };
+
+  const toggleWishlist = () => {
+    try {
+      const wl = JSON.parse(localStorage.getItem("planzo_wishlist") || "[]");
+      const updated = isWishlisted ? wl.filter((w: string) => w !== id) : [...wl, id];
+      localStorage.setItem("planzo_wishlist", JSON.stringify(updated));
+      setIsWishlisted(!isWishlisted);
+      toast({ title: isWishlisted ? "Removed from wishlist" : "Added to wishlist ♡" });
+    } catch {}
+  };
+
+  const avgRating = reviews.length > 0
+    ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
+    : null;
 
   if (!destination) {
     return (
@@ -49,8 +117,11 @@ const DestinationDetail = () => {
             <button className="p-2 rounded-full glass text-foreground hover:bg-card/90 transition-colors">
               <Share2 className="h-5 w-5" />
             </button>
-            <button className="p-2 rounded-full glass text-foreground hover:bg-card/90 transition-colors">
-              <Heart className="h-5 w-5" />
+            <button
+              onClick={toggleWishlist}
+              className={`p-2 rounded-full glass transition-colors ${isWishlisted ? "text-red-500 bg-red-500/20" : "text-foreground hover:bg-card/90"}`}
+            >
+              <Heart className={`h-5 w-5 ${isWishlisted ? "fill-red-500" : ""}`} />
             </button>
           </div>
         </div>
@@ -71,7 +142,7 @@ const DestinationDetail = () => {
               </span>
               <span className="flex items-center gap-1 text-sm text-primary-foreground/80">
                 <Star className="h-3.5 w-3.5 fill-sunset text-sunset" />
-                {destination.rating}
+                {avgRating ? `${avgRating} (${reviews.length})` : destination.rating}
               </span>
             </div>
           </motion.div>
@@ -211,6 +282,134 @@ const DestinationDetail = () => {
           </div>
         </motion.div>
 
+        {/* Reviews Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.38 }}
+          className="mt-8"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display text-lg font-bold text-foreground flex items-center gap-2">
+              <Star className="h-5 w-5 text-sunset" />
+              Reviews {reviews.length > 0 && <span className="text-sm font-normal text-muted-foreground">({reviews.length})</span>}
+            </h2>
+            <button
+              onClick={() => setShowReviewForm(!showReviewForm)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" /> Write Review
+            </button>
+          </div>
+
+          {/* Review Form */}
+          <AnimatePresence>
+            {showReviewForm && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-4 overflow-hidden"
+              >
+                <div className="p-4 rounded-2xl bg-card border border-border shadow-card space-y-3">
+                  <input
+                    type="text"
+                    value={reviewName}
+                    onChange={e => setReviewName(e.target.value)}
+                    placeholder="Your name"
+                    className="w-full px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+
+                  {/* Star Rating */}
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <button
+                        key={star}
+                        onClick={() => setReviewRating(star)}
+                        className="transition-transform hover:scale-110"
+                      >
+                        <Star
+                          className={`h-6 w-6 ${
+                            star <= reviewRating
+                              ? "fill-sunset text-sunset"
+                              : "text-muted-foreground/30"
+                          }`}
+                        />
+                      </button>
+                    ))}
+                    <span className="text-xs text-muted-foreground ml-2">{reviewRating}/5</span>
+                  </div>
+
+                  <textarea
+                    value={reviewText}
+                    onChange={e => setReviewText(e.target.value)}
+                    rows={3}
+                    placeholder="Share your experience..."
+                    className="w-full px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none resize-none focus:ring-2 focus:ring-primary/20"
+                  />
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowReviewForm(false)}
+                      className="flex-1 py-2.5 rounded-xl bg-muted text-muted-foreground text-sm font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSubmitReview}
+                      className="flex-1 py-2.5 rounded-xl gradient-hero text-white text-sm font-semibold flex items-center justify-center gap-2"
+                    >
+                      <Send className="h-3.5 w-3.5" /> Submit
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Reviews List */}
+          {reviews.length > 0 ? (
+            <div className="space-y-3">
+              {reviews.map((review, idx) => (
+                <motion.div
+                  key={review.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="p-4 rounded-2xl bg-card border border-border shadow-card"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-full gradient-hero flex items-center justify-center">
+                        <User className="h-4 w-4 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{review.name}</p>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`h-3 w-3 ${i < review.rating ? "fill-sunset text-sunset" : "text-muted-foreground/20"}`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(review.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{review.text}</p>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-sm text-muted-foreground">No reviews yet. Be the first to share your experience!</p>
+            </div>
+          )}
+        </motion.div>
+
         {/* CTA */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -231,3 +430,4 @@ const DestinationDetail = () => {
 };
 
 export default DestinationDetail;
+

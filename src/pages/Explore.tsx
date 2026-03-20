@@ -1,8 +1,9 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, MapPin, Star, Filter, IndianRupee, X, SortAsc, TrendingUp, ArrowUpDown } from "lucide-react";
+import { Search, MapPin, Star, IndianRupee, X, SortAsc, TrendingUp, ArrowUpDown, Heart } from "lucide-react";
 import { indianDestinations } from "@/data/destinations";
+import { useToast } from "@/hooks/use-toast";
 
 const filterTags = ["All", "Culture", "Beach", "Nature", "Adventure", "Romantic"];
 const sortOptions = [
@@ -17,8 +18,21 @@ const Explore = () => {
   const [activeFilter, setActiveFilter] = useState("All");
   const [sortBy, setSortBy] = useState("default");
   const [showSortPanel, setShowSortPanel] = useState(false);
+  const [wishlist, setWishlist] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("planzo_wishlist") || "[]"); } catch { return []; }
+  });
   const navigate = useNavigate();
   const searchRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  const toggleWishlist = (e: React.MouseEvent, destId: string, destName: string) => {
+    e.stopPropagation();
+    const isWishlisted = wishlist.includes(destId);
+    const updated = isWishlisted ? wishlist.filter(id => id !== destId) : [...wishlist, destId];
+    setWishlist(updated);
+    localStorage.setItem("planzo_wishlist", JSON.stringify(updated));
+    toast({ title: isWishlisted ? `Removed from Wishlist` : `♡ Added to Wishlist`, description: destName });
+  };
 
   const filtered = indianDestinations
     .filter((d) => {
@@ -145,6 +159,17 @@ const Explore = () => {
               <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-card/80 backdrop-blur text-foreground">
                 {d.category}
               </span>
+              {/* Wishlist button */}
+              <button
+                onClick={(e) => toggleWishlist(e, String(d.id), d.name)}
+                className={`absolute bottom-3 right-3 p-2 rounded-full backdrop-blur-md transition-all shadow-md ${
+                  wishlist.includes(String(d.id))
+                    ? "bg-red-500 text-white"
+                    : "bg-white/30 text-white hover:bg-white/50"
+                }`}
+              >
+                <Heart className={`h-3.5 w-3.5 ${wishlist.includes(String(d.id)) ? "fill-white" : ""}`} />
+              </button>
             </div>
             <div className="p-4">
               <div className="flex items-start justify-between">

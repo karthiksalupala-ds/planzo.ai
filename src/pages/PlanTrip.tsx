@@ -5,7 +5,7 @@ import {
   Sparkles, Send, MapPin, IndianRupee, Calendar, Users, ChevronRight,
   Hotel, Utensils, Camera, Loader2, Heart, Mountain, Palmtree, Baby,
   User, Shield, Backpack, CloudSun, AlertCircle, Save, Train, Plane, Bus, RefreshCw, Pencil, TramFront, Bike,
-  Car, Navigation, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Share2, XCircle, ShoppingBag, Printer, Download, Plus, X, Clock, Navigation2, Map
+  Car, Navigation, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Share2, XCircle, ShoppingBag, Printer, Download, Plus, X, Clock, Navigation2, Map, CalendarPlus
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,6 +21,9 @@ import InteractiveMap from "@/components/InteractiveMap";
 import ItineraryDisplay from "@/components/ItineraryDisplay";
 import { generateAlternativeActivity } from "@/lib/stream-ai";
 import { indianDestinations } from "@/data/destinations";
+import TripCountdown from "@/components/TripCountdown";
+import { downloadTripICS, openGoogleCalendar } from "@/lib/calendar";
+import TravelMode from "@/components/TravelMode";
 
 interface Message {
   text: string;
@@ -57,6 +60,7 @@ const PlanTrip = () => {
   const [isSwapping, setIsSwapping] = useState<string | null>(null);
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [showMobileMap, setShowMobileMap] = useState(false);
+  const [showTravelMode, setShowTravelMode] = useState(false);
   const [chatMessages, setChatMessages] = useState<Message[]>([
     { text: "Hello! I'm your AI trip assistant. Ask me anything about your plan.", isUser: false },
   ]);
@@ -66,6 +70,7 @@ const PlanTrip = () => {
   const [budget, setBudget] = useState(initialBudget && initialBudget !== "NaN" ? initialBudget : "15000");
   const [days, setDays] = useState(isNaN(parsedDays) ? 3 : parsedDays);
   const [travelers, setTravelers] = useState(2);
+  const [startDate, setStartDate] = useState("");
 
   // Destination autocomplete
   const [autocompleteIndex, setAutocompleteIndex] = useState<number | null>(null);
@@ -190,6 +195,8 @@ const PlanTrip = () => {
       days,
       travelers,
       plan_data: plan as unknown as Json,
+      start_date: startDate || null,
+      status: "planned",
     }).select().single();
     setSaving(false);
     if (error) {
@@ -226,6 +233,7 @@ const PlanTrip = () => {
 
   const handleDownloadPDF = async () => {
     if (!pdfRef.current) return;
+    toast({ title: "Generating PDF...", description: "Your itinerary is being exported." });
     const html2pdf = (await import("html2pdf.js")).default;
     const opt = {
       margin: [10, 10, 10, 10] as [number, number, number, number],
@@ -570,7 +578,7 @@ const PlanTrip = () => {
         </div>
 
         {/* Quick Options */}
-        <div className="grid grid-cols-3 gap-3 mt-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1">
               <IndianRupee className="h-3 w-3" /> Budget (₹)
@@ -610,6 +618,18 @@ const PlanTrip = () => {
               onChange={(e) => setTravelers(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
               className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
               placeholder="2"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1">
+              <CalendarPlus className="h-3 w-3" /> Start Date
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              min={new Date().toISOString().split("T")[0]}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
         </div>
@@ -726,7 +746,7 @@ const PlanTrip = () => {
                   <div className="flex-1">
                     <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{plan.summary}</p>
                   </div>
-                  <div className="flex gap-2 flex-shrink-0">
+                  <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
                     <button
                       onClick={handlePrintTrip}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/80 transition-colors"
@@ -749,7 +769,28 @@ const PlanTrip = () => {
                       {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                       Save
                     </button>
+                    {startDate && (
+                      <button
+                        onClick={() => openGoogleCalendar({ title: plan.destination || destination, startDate, days, query: destination })}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-colors"
+                      >
+                        <CalendarPlus className="h-3.5 w-3.5" />
+                        Calendar
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowTravelMode(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold hover:bg-emerald-600/20 transition-colors"
+                    >
+                      <Navigation className="h-3.5 w-3.5" />
+                      Travel Mode
+                    </button>
                   </div>
+                </div>
+              )}
+              {startDate && (
+                <div className="mt-3">
+                  <TripCountdown startDate={startDate} tripTitle={plan.destination || destination} days={days} />
                 </div>
               )}
               {plan.weatherNote && (
@@ -1023,14 +1064,20 @@ const PlanTrip = () => {
               </div>
             )}
 
-            {/* Mobile Map Toggle FAB */}
+            {/* Mobile FABs */}
             {plan && (
-              <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 md:hidden">
+              <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 md:hidden flex gap-2">
                 <button 
                   onClick={() => setShowMobileMap(!showMobileMap)}
-                  className="bg-foreground text-background px-6 py-3 rounded-full shadow-elevated flex items-center gap-2 font-bold text-sm hover:scale-105 transition-transform"
+                  className="bg-foreground text-background px-5 py-3 rounded-full shadow-elevated flex items-center gap-2 font-bold text-sm hover:scale-105 transition-transform"
                 >
-                  <Map className="h-4 w-4" /> {showMobileMap ? "Hide Map" : "View Map"}
+                  <Map className="h-4 w-4" /> {showMobileMap ? "Hide Map" : "Map"}
+                </button>
+                <button 
+                  onClick={() => setShowTravelMode(true)}
+                  className="bg-emerald-600 text-white px-5 py-3 rounded-full shadow-elevated flex items-center gap-2 font-bold text-sm hover:scale-105 transition-transform"
+                >
+                  <Navigation className="h-4 w-4" /> Travel Mode
                 </button>
               </div>
             )}
@@ -1118,6 +1165,17 @@ const PlanTrip = () => {
               setMessages={setChatMessages}
             />
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Travel Mode Overlay */}
+      <AnimatePresence>
+        {showTravelMode && plan && (
+          <TravelMode
+            plan={plan}
+            startDate={startDate || undefined}
+            onClose={() => setShowTravelMode(false)}
+          />
         )}
       </AnimatePresence>
 

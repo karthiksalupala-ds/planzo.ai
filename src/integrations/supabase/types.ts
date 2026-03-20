@@ -53,6 +53,8 @@ export type Database = {
           mood: string | null
           plan_data: Json
           query: string | null
+          start_date: string | null
+          status: string | null
           title: string
           travelers: number | null
           user_id: string
@@ -65,6 +67,8 @@ export type Database = {
           mood?: string | null
           plan_data?: Json
           query?: string | null
+          start_date?: string | null
+          status?: string | null
           title: string
           travelers?: number | null
           user_id: string
@@ -77,6 +81,8 @@ export type Database = {
           mood?: string | null
           plan_data?: Json
           query?: string | null
+          start_date?: string | null
+          status?: string | null
           title?: string
           travelers?: number | null
           user_id?: string

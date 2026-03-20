@@ -1,7 +1,8 @@
-import { Search, Sparkles, Mic } from "lucide-react";
+import { Search, Sparkles, Mic, MapPin } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { indianDestinations } from "@/data/destinations";
 
 const SCROLLING_PLACEHOLDERS = [
   "Where to next?",
@@ -30,22 +31,24 @@ const AISearchBar = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
-      navigate(`/plan?q=${encodeURIComponent(query)}`);
+      navigate(`/plan?dest=${encodeURIComponent(query)}`);
     } else {
-      // If empty, navigate to the current placeholder text if it's a location
       const currentPlaceholder = SCROLLING_PLACEHOLDERS[placeholderIndex];
       if (currentPlaceholder !== "Where to next?" && currentPlaceholder !== "Search destinations...") {
-         navigate(`/plan?q=${encodeURIComponent(currentPlaceholder)}`);
+         navigate(`/plan?dest=${encodeURIComponent(currentPlaceholder)}`);
       }
     }
   };
 
-  const suggestions = [
-    "Udaipur, Rajasthan",
-    "Goa Beaches",
-    "Munnar, Kerala",
-    "Leh Ladakh",
-  ];
+  // Dynamic suggestions from real destinations data
+  const suggestions = query.trim().length > 1
+    ? indianDestinations
+        .filter(d =>
+          d.name.toLowerCase().includes(query.toLowerCase()) ||
+          d.state.toLowerCase().includes(query.toLowerCase())
+        )
+        .slice(0, 5)
+    : indianDestinations.slice(0, 4); // Top 4 as default when focused
 
   return (
     <div className="relative w-full max-w-3xl mx-auto z-50">
@@ -101,19 +104,20 @@ const AISearchBar = () => {
           className="absolute top-full left-0 right-0 mt-2 p-2 bg-card rounded-2xl shadow-elevated z-10 border border-border"
         >
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold px-2 pb-1">
-            Try asking
+            {query.trim().length > 1 ? "Matching destinations" : "Popular destinations"}
           </p>
-          {suggestions.map((s) => (
+          {suggestions.map((d) => (
             <button
-              key={s}
-              onClick={() => {
-                setQuery(s);
-                navigate(`/plan?q=${encodeURIComponent(s)}`);
+              key={d.id}
+              onMouseDown={() => {
+                setQuery(d.name);
+                navigate(`/plan?dest=${encodeURIComponent(d.name)}`);
               }}
               className="flex items-center gap-2 w-full px-3 py-2 text-xs text-foreground hover:bg-muted rounded-lg transition-colors text-left"
             >
-              <Sparkles className="h-3 w-3 text-primary flex-shrink-0" />
-              {s}
+              <MapPin className="h-3 w-3 text-primary flex-shrink-0" />
+              <span className="font-medium">{d.name}</span>
+              <span className="text-muted-foreground ml-auto">{d.state}</span>
             </button>
           ))}
         </motion.div>

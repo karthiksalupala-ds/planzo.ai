@@ -88,6 +88,7 @@ const Auth = () => {
           <p className="text-sm text-muted-foreground mt-1">
             {isLogin ? "Welcome back, traveler" : "Start your journey"}
           </p>
+          <span className="mt-2 text-[11px] text-primary/80 font-semibold bg-primary/10 px-3 py-1 rounded-full">✈️ Join 1,000+ travelers already planning</span>
         </div>
 
         {signupSuccess ? (
@@ -209,6 +210,14 @@ const Auth = () => {
             {isLogin ? "Sign Up" : "Sign In"}
           </button>
         </p>
+        <div className="text-center mt-3">
+          <button
+            onClick={() => navigate("/")}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+          >
+            Continue as guest →
+          </button>
+        </div>
       </motion.div>
     </div>
   );
