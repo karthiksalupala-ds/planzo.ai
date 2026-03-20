@@ -18,7 +18,7 @@ import TripPDF from "@/components/TripPDF";
 import type { LocalTransportOption, TripActivity, TripDay, TripPlan, TravelOption } from "@/types/trip-plan";
 import { getPexelsImage } from "@/lib/pexels";
 import InteractiveMap from "@/components/InteractiveMap";
-import { generateAlternativeActivity } from "@/lib/stream-ai";
+import { generateAlternativeActivity, streamTripPlan } from "@/lib/stream-ai";
 
 interface Message {
   text: string;

@@ -1,53 +1,96 @@
 import { Search, Sparkles, Mic } from "lucide-react";
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+
+const SCROLLING_PLACEHOLDERS = [
+  "Where to next?",
+  "Kerala Backwaters",
+  "Hidden gems in Rajasthan",
+  "Beaches in Goa",
+  "Adventure in Manali",
+  "Explore the Himalayas",
+  "Search destinations..."
+];
 
 const AISearchBar = () => {
   const [query, setQuery] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const navigate = useNavigate();
 
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % SCROLLING_PLACEHOLDERS.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
       navigate(`/plan?q=${encodeURIComponent(query)}`);
+    } else {
+      // If empty, navigate to the current placeholder text if it's a location
+      const currentPlaceholder = SCROLLING_PLACEHOLDERS[placeholderIndex];
+      if (currentPlaceholder !== "Where to next?" && currentPlaceholder !== "Search destinations...") {
+         navigate(`/plan?q=${encodeURIComponent(currentPlaceholder)}`);
+      }
     }
   };
 
   const suggestions = [
-    "Plan a 3-day Goa trip under ₹15,000",
-    "Weekend getaway to Udaipur for couples",
-    "Best adventure spots in Himachal Pradesh",
-    "Family trip to Kerala backwaters",
+    "Udaipur, Rajasthan",
+    "Goa Beaches",
+    "Munnar, Kerala",
+    "Leh Ladakh",
   ];
 
   return (
-    <div className="relative w-full">
+    <div className="relative w-full max-w-3xl mx-auto z-50">
       <form onSubmit={handleSubmit}>
         <div
-          className={`relative flex items-center gap-2 px-4 py-3.5 rounded-2xl bg-card shadow-card transition-shadow ${
-            isFocused ? "shadow-elevated ring-2 ring-primary/20" : ""
+          className={`relative flex items-center gap-2 px-5 py-4 rounded-2xl md:rounded-full bg-white/20 dark:bg-black/20 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] transition-all duration-300 ${
+            isFocused ? "shadow-[0_8px_32px_0_rgba(31,38,135,0.3)] ring-2 ring-primary/40 bg-white/40 dark:bg-black/40 scale-[1.02]" : "hover:bg-white/30 dark:hover:bg-black/30"
           }`}
         >
-          <Sparkles className="h-5 w-5 text-primary flex-shrink-0" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-            placeholder="Ask AI to plan your trip..."
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
-          />
-          <button type="button" className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
-            <Mic className="h-4 w-4" />
+          <Search className="h-5 w-5 text-foreground/80 flex-shrink-0 ml-1" />
+          
+          <div className="relative flex-1 h-6 flex items-center overflow-hidden">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setTimeout(() => setIsFocused(false), 200)}
+              className="absolute inset-0 w-full h-full bg-transparent text-base md:text-lg text-foreground font-semibold placeholder:text-transparent outline-none z-10"
+            />
+            {/* Typewriter Placeholder */}
+            {!query && (
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={placeholderIndex}
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -20, opacity: 0 }}
+                  transition={{ duration: 0.4, ease: "easeOut" }}
+                  className="absolute inset-0 w-full h-full flex items-center text-base md:text-lg text-foreground/60 font-medium pointer-events-none"
+                >
+                  {SCROLLING_PLACEHOLDERS[placeholderIndex]}
+                </motion.div>
+              </AnimatePresence>
+            )}
+          </div>
+
+          <button type="button" className="p-2 text-foreground/70 hover:text-foreground hover:bg-white/20 rounded-full transition-colors hidden sm:block">
+            <Mic className="h-5 w-5" />
           </button>
           <button
             type="submit"
-            className="p-2 rounded-xl gradient-hero text-primary-foreground transition-transform hover:scale-105 active:scale-95"
+            className="px-6 py-2.5 rounded-xl md:rounded-full bg-primary text-primary-foreground font-bold shadow-lg shadow-primary/30 transition-transform hover:scale-105 active:scale-95 flex items-center gap-2"
           >
-            <Search className="h-4 w-4" />
+            Search
           </button>
         </div>
       </form>

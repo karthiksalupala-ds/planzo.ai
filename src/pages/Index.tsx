@@ -7,7 +7,7 @@ import DestinationCard from "@/components/DestinationCard";
 import SmartCard from "@/components/SmartCard";
 import CategoryChip from "@/components/CategoryChip";
 import { indianDestinations } from "@/data/destinations";
-import heroImg from "@/assets/hero-travel.jpg";
+import ExploreMap from "@/components/ExploreMap";
 
 const categories = [
   { icon: Compass, label: "All" },
@@ -156,6 +156,30 @@ const itemVariants = {
   }
 };
 
+const CommunityTicker = () => {
+  const messages = [
+    "✨ Arjun just planned a 4-day adventure in Manali",
+    "✨ Priya is exploring street food in Old Delhi",
+    "✨ Rahul generated a romantic getaway to Udaipur",
+    "✨ Sneha is packing for the Kerala Backwaters",
+    "✨ Aditi just booked flights to Leh Ladakh",
+    "✨ Vikram built a 7-day royal tour of Rajasthan",
+    "✨ Aisha generated a budget backpacking trip to Hampi"
+  ];
+  return (
+    <div className="w-full bg-primary/10 border-b border-primary/20 py-3 overflow-hidden flex items-center relative z-20 backdrop-blur-md shadow-sm">
+      <motion.div 
+        animate={{ x: ["0%", "-50%"] }}
+        transition={{ repeat: Infinity, duration: 45, ease: "linear" }}
+        className="flex whitespace-nowrap gap-16 text-xs md:text-sm font-bold text-primary/90 shrink-0 w-max pr-16"
+      >
+        {messages.map((m, i) => <span key={i}>{m}</span>)}
+        {messages.map((m, i) => <span key={`dup-${i}`}>{m}</span>)}
+      </motion.div>
+    </div>
+  );
+};
+
 const Index = () => {
   const [activeCategory, setActiveCategory] = useState("All");
   const navigate = useNavigate();
@@ -167,40 +191,55 @@ const Index = () => {
   return (
     <div className="min-h-screen pb-20">
       {/* Hero */}
-      <section className="relative h-[420px] md:h-[500px] overflow-hidden">
-        <img src={heroImg} alt="Travel hero" className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-b from-foreground/40 via-foreground/20 to-background" />
-        <div className="relative h-full flex flex-col justify-end px-5 pb-8 md:container md:pb-12">
+      <section className="relative h-[480px] md:h-[650px] overflow-hidden flex flex-col justify-center">
+        {/* Cinematic Video Background */}
+        <video 
+          autoPlay 
+          loop 
+          muted 
+          playsInline 
+          className="absolute inset-0 h-full w-full object-cover scale-105"
+        >
+          <source src="https://vjs.zencdn.net/v/oceans.mp4" type="video/mp4" />
+          {/* Fallback image if video fails to load */}
+        </video>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-background z-10" />
+        
+        <div className="relative z-20 px-5 md:container w-full h-full flex flex-col justify-center items-center text-center mt-12">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="w-full max-w-4xl mx-auto flex flex-col items-center"
           >
-            <div className="flex items-center gap-1.5 mb-2">
-              <Sparkles className="h-4 w-4 text-sunset" />
-              <span className="text-xs font-semibold text-primary-foreground/90 uppercase tracking-wider">
-                AI-Powered · Explore India
+            <div className="flex items-center gap-1.5 mb-4 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20">
+              <Sparkles className="h-3.5 w-3.5 text-yellow-300" />
+              <span className="text-xs font-bold text-white uppercase tracking-widest">
+                AI-Powered Travel Intelligence
               </span>
             </div>
-            <h1 className="font-display text-3xl md:text-5xl font-bold text-primary-foreground leading-tight">
-              Smart Trip
-              <br />
-              Planner
+            
+            <h1 className="font-display text-4xl md:text-6xl lg:text-7xl font-bold text-white leading-tight drop-shadow-xl tracking-tight mb-4">
+              Plan incredible trips <br className="hidden md:block" />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-300 to-sky-300">in seconds.</span>
             </h1>
-            <p className="text-sm md:text-base text-primary-foreground/80 mt-2 max-w-md">
-              Discover incredible India – from the Taj Mahal to Kerala backwaters, plan your perfect trip with AI.
+            
+            <p className="text-sm md:text-lg text-white/90 max-w-2xl font-medium drop-shadow-md mb-10">
+              Discover hidden gems, instantly craft perfect itineraries, and explore India like never before. Tell us your vibe, and our AI does the rest.
             </p>
+
+            <div className="w-full animate-in fade-in zoom-in duration-1000 delay-300 fill-mode-both px-2 md:px-0">
+              <AISearchBar />
+            </div>
           </motion.div>
         </div>
       </section>
 
-      {/* AI Search */}
-      <div className="px-5 md:container -mt-6 relative z-10">
-        <AISearchBar />
-      </div>
+      {/* Community Ticker */}
+      <CommunityTicker />
 
       {/* Categories */}
-      <section className="mt-6 px-5 md:container">
+      <section className="mt-8 px-5 md:container">
         <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
           {categories.map((c) => (
             <CategoryChip
@@ -214,21 +253,21 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Trending Destinations */}
-      <section className="mt-8 px-5 md:container">
+      {/* Featured Clone Carousel (Upgraded Trending) */}
+      <section className="mt-10 px-5 md:container">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="font-display text-lg font-bold text-foreground flex items-center gap-2">
+            <h2 className="font-display text-xl font-bold text-foreground flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-primary" />
-              Trending in India
+              Featured AI Trips
             </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Top destinations this season</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Pre-generated itineraries you can clone & customise instantly</p>
           </div>
           <button onClick={() => navigate("/explore")} className="text-xs font-semibold text-primary">
             See all
           </button>
         </div>
-        <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
+        <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-4">
           {filteredDestinations.map((d, i) => (
             <DestinationCard
               key={d.id}
@@ -242,6 +281,18 @@ const Index = () => {
             />
           ))}
         </div>
+      </section>
+
+      {/* Mini Explore Map */}
+      <section className="mt-10 px-5 md:container">
+        <div className="mb-6">
+          <h2 className="font-display text-xl font-bold text-foreground flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-coral" />
+            Explore India
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Interactive map to discover trending spots</p>
+        </div>
+        <ExploreMap destinations={indianDestinations} />
       </section>
 
       {/* Quick Access */}
