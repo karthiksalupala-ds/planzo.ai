@@ -5,7 +5,7 @@ import {
   Sparkles, Send, MapPin, IndianRupee, Calendar, Users, ChevronRight,
   Hotel, Utensils, Camera, Loader2, Heart, Mountain, Palmtree, Baby,
   User, Shield, Backpack, CloudSun, AlertCircle, Save, Train, Plane, Bus, RefreshCw, Pencil, TramFront, Bike,
-  Car, Navigation, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Share2, XCircle, ShoppingBag, Printer, Download, Plus, X, Clock, Navigation2, Map, CalendarPlus
+  Car, Navigation, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Share2, XCircle, ShoppingBag, Printer, Download, Plus, X, Clock, Navigation2, Map, CalendarPlus, PieChart
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -98,7 +98,7 @@ const PlanTrip = () => {
 
   const updateRemotePlan = async (updatedPlan: TripPlan) => {
     if (tripId) {
-       await supabase.from("saved_trips").update({ plan_data: updatedPlan as unknown as Json }).eq("id", tripId);
+      await supabase.from("saved_trips").update({ plan_data: updatedPlan as unknown as Json }).eq("id", tripId);
     }
   };
 
@@ -123,13 +123,13 @@ const PlanTrip = () => {
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'saved_trips', filter: `id=eq.${tripId}` },
           (payload) => {
-             if (payload.new && payload.new.plan_data) {
-                setPlan(payload.new.plan_data as unknown as TripPlan);
-             }
+            if (payload.new && payload.new.plan_data) {
+              setPlan(payload.new.plan_data as unknown as TripPlan);
+            }
           }
         )
         .subscribe();
-        
+
       return () => {
         supabase.removeChannel(channel);
       };
@@ -191,10 +191,10 @@ const PlanTrip = () => {
       title: plan.destination || destination,
       query: destination,
       mood: activeMood,
-      budget,
+      budget: parseFloat(budget) || 0,
       days,
       travelers,
-      plan_data: plan as unknown as Json,
+      plan_data: (plan as unknown) as Json,
       start_date: startDate || null,
       status: "planned",
     }).select().single();
@@ -412,38 +412,38 @@ const PlanTrip = () => {
     if (!plan) return;
     const swapId = `${dayNum}-${activityIndex}`;
     setIsSwapping(swapId);
-    
+
     try {
       const alt = await generateAlternativeActivity(plan.destination || destination, activeMood, oldActivityName);
       if (!alt) throw new Error("Could not generate alternative");
 
       const image = await getPexelsImage(alt.imageSearchQuery || alt.place || alt.name);
-      
+
       setPlan(prev => {
         if (!prev || !prev.itinerary) return prev;
         const newItinerary = [...prev.itinerary];
         const targetDayParts = newItinerary.find(d => d.day === dayNum);
         if (targetDayParts && targetDayParts.activities) {
-           const actArray = [...targetDayParts.activities];
-           const oldAct = actArray[activityIndex];
-           const oldLat = typeof oldAct !== 'string' ? oldAct.lat : plan.map?.lat;
-           const oldLng = typeof oldAct !== 'string' ? oldAct.lng : plan.map?.lng;
-           
-           actArray[activityIndex] = {
-             name: alt.name,
-             place: alt.place,
-             imageSearchQuery: alt.imageSearchQuery,
-             image,
-             lat: oldLat,
-             lng: oldLng
-           };
-           targetDayParts.activities = actArray;
+          const actArray = [...targetDayParts.activities];
+          const oldAct = actArray[activityIndex];
+          const oldLat = typeof oldAct !== 'string' ? oldAct.lat : plan.map?.lat;
+          const oldLng = typeof oldAct !== 'string' ? oldAct.lng : plan.map?.lng;
+
+          actArray[activityIndex] = {
+            name: alt.name,
+            place: alt.place,
+            imageSearchQuery: alt.imageSearchQuery,
+            image,
+            lat: oldLat,
+            lng: oldLng
+          };
+          targetDayParts.activities = actArray;
         }
         const updated = { ...prev, itinerary: newItinerary };
         if (tripId) updateRemotePlan(updated);
         return updated;
       });
-      
+
       toast({ title: "Activity Swapped!", description: `Replaced with ${alt.name}` });
     } catch {
       toast({ title: "Failed to swap", variant: "destructive" });
@@ -671,481 +671,280 @@ const PlanTrip = () => {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 p-4 rounded-2xl bg-card shadow-card">
           <div className="flex items-center gap-2 mb-2">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            <p className="text-xs font-semibold text-muted-foreground">AI is crafting your itinerary with images...</p>
+            <p className="text-xs font-semibold text-muted-foreground">your itinerary with images...</p>
           </div>
           <div className="h-2 rounded-full bg-muted overflow-hidden">
             <motion.div animate={{ width: ["0%", "100%"] }} transition={{ duration: 8, ease: "linear", repeat: Infinity }} className="h-full rounded-full gradient-hero" />
           </div>
         </motion.div>
       )}
-      {/* Loading Skeleton */}
-      {isPlanning && !plan && <PlanSkeleton />}
 
       {/* Generated Plan */}
       <AnimatePresence>
         {plan && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-6 space-y-4">
-            {/* Summary with Destination Image */}
-            <div className="p-4 rounded-2xl bg-card shadow-card overflow-hidden">
-              {plan.destinationImage ? (
-                <div className="relative -mx-4 -mt-4 mb-3 h-48 overflow-hidden">
-                  <img
-                    src={plan.destinationImage}
-                    alt={plan.destination}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  <div className="absolute bottom-3 left-4 right-4">
-                    <h3 className="font-display font-bold text-white text-xl">{plan.destination}</h3>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <h3 className="font-display font-bold text-foreground text-lg">{plan.destination}</h3>
-                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{plan.summary}</p>
-                  </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button
-                      onClick={handleDownloadPDF}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/80 transition-colors"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      PDF
-                    </button>
-                    <button
-                      onClick={handlePrintTrip}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/80 transition-colors"
-                    >
-                      <Printer className="h-3.5 w-3.5" />
-                      Print
-                    </button>
-                    <button
-                      onClick={handleShareTrip}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/80 transition-colors"
-                    >
-                      <Share2 className="h-3.5 w-3.5" />
-                      Share
-                    </button>
-                    <button
-                      onClick={handleSaveTrip}
-                      disabled={saving}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors disabled:opacity-50"
-                    >
-                      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                      Save
-                    </button>
-                  </div>
-                </div>
-              )}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-8">
+            {/* Header / Summary Card */}
+            <div className="p-0 rounded-[32px] bg-card shadow-elevated overflow-hidden border border-border/50 mb-8">
               {plan.destinationImage && (
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{plan.summary}</p>
+                <div className="relative h-64 overflow-hidden">
+                  <img src={plan.destinationImage} alt={plan.destination} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-card via-card/20 to-transparent" />
+                  <div className="absolute bottom-6 left-8 right-8">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                      <div>
+                        <h2 className="font-display font-black text-4xl text-foreground tracking-tight">{plan.destination}</h2>
+                        <div className="flex items-center gap-3 mt-2">
+                          <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest">{activeMood} Adventure</span>
+                          <span className="px-3 py-1 rounded-full bg-muted text-muted-foreground text-[10px] font-bold uppercase tracking-widest">{days} Days</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={handleShareTrip} className="p-3 rounded-2xl bg-card border border-border hover:bg-muted transition-colors shadow-sm"><Share2 className="h-5 w-5 text-foreground" /></button>
+                        <button onClick={handleSaveTrip} disabled={saving} className="px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow-lg hover:opacity-90 transition-all flex items-center gap-2">
+                          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                          {saving ? "Saving..." : tripId ? "Update Plan" : "Save Trip"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
-                    <button
-                      onClick={handlePrintTrip}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/80 transition-colors"
-                    >
-                      <Printer className="h-3.5 w-3.5" />
-                      Print
-                    </button>
-                    <button
-                      onClick={handleShareTrip}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/80 transition-colors"
-                    >
-                      <Share2 className="h-3.5 w-3.5" />
-                      Share
-                    </button>
-                    <button
-                      onClick={handleSaveTrip}
-                      disabled={saving}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors disabled:opacity-50"
-                    >
-                      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                      Save
-                    </button>
-                    {startDate && (
-                      <button
-                        onClick={() => openGoogleCalendar({ title: plan.destination || destination, startDate, days, query: destination })}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-colors"
-                      >
-                        <CalendarPlus className="h-3.5 w-3.5" />
-                        Calendar
+                </div>
+              )}
+
+              {!plan.destinationImage && (
+                <div className="p-8 border-b border-border/50">
+                  <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                    <h2 className="font-display font-black text-3xl text-foreground tracking-tight">{plan.destination}</h2>
+                    <div className="flex gap-2">
+                      <button onClick={handleShareTrip} className="p-3 rounded-2xl bg-card border border-border hover:bg-muted transition-colors shadow-sm"><Share2 className="h-4 w-4 text-foreground" /></button>
+                      <button onClick={handleSaveTrip} disabled={saving} className="px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow-lg flex items-center gap-2">
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
                       </button>
-                    )}
-                    <button
-                      onClick={() => setShowTravelMode(true)}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold hover:bg-emerald-600/20 transition-colors"
-                    >
-                      <Navigation className="h-3.5 w-3.5" />
-                      Travel Mode
-                    </button>
+                    </div>
                   </div>
                 </div>
               )}
-              {startDate && (
-                <div className="mt-3">
-                  <TripCountdown startDate={startDate} tripTitle={plan.destination || destination} days={days} />
+
+              <div className="p-8 pt-6">
+                <p className="text-muted-foreground leading-relaxed text-sm md:text-base max-w-2xl">{plan.summary}</p>
+                <div className="flex flex-wrap gap-4 mt-6">
+                  {startDate && <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20 text-xs font-bold"><Calendar className="h-3.5 w-3.5" /> Starts {new Date(startDate).toLocaleDateString()}</div>}
+                  <div className="flex items-center gap-2 px-4 py-2 bg-primary/5 text-primary rounded-xl border border-primary/20 text-xs font-bold"><Users className="h-3.5 w-3.5" /> {travelers} Travelers</div>
+                  <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/5 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-500/20 text-xs font-bold"><IndianRupee className="h-3.5 w-3.5" /> Budget: ₹{parseInt(budget).toLocaleString()}</div>
                 </div>
-              )}
-              {plan.weatherNote && (
-                <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-lg bg-ocean/10">
-                  <CloudSun className="h-4 w-4 text-ocean" />
-                  <span className="text-xs text-ocean font-medium">{plan.weatherNote}</span>
-                </div>
-              )}
+              </div>
             </div>
 
-            {/* Map Section */}
-            {plan.map && (
-              <div className="p-4 rounded-2xl bg-card shadow-card">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-display font-semibold text-foreground text-sm flex items-center gap-2">
-                    <Navigation className="h-4 w-4 text-primary" /> Location Map
-                  </h3>
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${plan.map.lat},${plan.map.lng}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+            {/* Content Tabs */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-1 p-1 bg-muted/40 backdrop-blur-md rounded-2xl border border-border/50 w-full md:w-fit overflow-x-auto scrollbar-hide">
+                {(['itinerary', 'map', 'budget', 'logistics'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      const searchParams = new URLSearchParams(window.location.search);
+                      searchParams.set('tab', tab);
+                      window.history.replaceState({}, '', `?${searchParams.toString()}`);
+                      window.dispatchEvent(new Event('popstate'));
+                    }}
+                    className={`px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${(new URLSearchParams(window.location.search).get('tab') || 'itinerary') === tab
+                        ? "bg-card text-foreground shadow-card border border-border/50"
+                        : "text-muted-foreground hover:text-foreground"
+                      }`}
                   >
-                    Open in Maps <ChevronRight className="h-3 w-3" />
-                  </a>
-                </div>
-                <div className="rounded-xl overflow-hidden border border-border/50 h-48">
-                  {plan.map.lat && plan.map.lng ? (
-                    <iframe
-                      title="Trip Location"
-                      width="100%"
-                      height="100%"
-                      loading="lazy"
-                      style={{ border: 0, borderRadius: '12px' }}
-                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(plan.map.lng) - 0.05},${Number(plan.map.lat) - 0.05},${Number(plan.map.lng) + 0.05},${Number(plan.map.lat) + 0.05}&layer=mapnik&marker=${plan.map.lat},${plan.map.lng}`}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full bg-muted/30 text-sm text-muted-foreground">
-                      Map location unavailable
-                    </div>
-                  )}
-                </div>
+                    {tab}
+                  </button>
+                ))}
               </div>
-            )}
 
-            {/* Budget Health Meter */}
-            {budgetInfo && (
-              <div className="p-4 rounded-2xl bg-card shadow-card border-2 border-border">
-                <div className="flex items-center gap-2 mb-3">
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                  <h3 className="font-display font-semibold text-foreground text-sm">Budget Health</h3>
-                </div>
-                <div className={`flex items-center gap-2 mb-3 p-2 rounded-lg ${budgetStatus.includes("🟢") || budgetStatus.includes("Within") ? "bg-emerald-500/10" :
-                  budgetStatus.includes("🟡") || budgetStatus.includes("Near") ? "bg-amber-500/10" :
-                    "bg-red-500/10"
-                  }`}>
-                  <StatusIcon className={`h-5 w-5 ${getStatusColor()}`} />
-                  <span className={`text-sm font-semibold ${getStatusColor()}`}>{budgetStatus}</span>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Budget Used</span>
-                    <span className="font-semibold text-foreground">
-                      {budgetInfo.totalEstimated || "₹0"} / {budgetInfo.userBudget || `₹${parseInt(budget).toLocaleString()}`}
-                    </span>
-                  </div>
-                  <div className="h-3 rounded-full bg-muted overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.min(budgetUsagePercent, 100)}%` }}
-                      transition={{ delay: 0.3, duration: 0.6 }}
-                      className={`h-full rounded-full ${budgetUsagePercent <= 70 ? "bg-emerald-500" :
-                        budgetUsagePercent <= 90 ? "bg-amber-500" :
-                          "bg-red-500"
-                        }`}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <TrendingDown className="h-3 w-3" />
-                      Remaining: {budgetInfo.remaining || "₹0"}
-                    </span>
-                    <span className="font-semibold">{budgetUsagePercent}% used</span>
-                  </div>
-                </div>
-                {plan.adjustments && plan.adjustments.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-border">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Budget Adjustments</p>
-                    <div className="space-y-1">
-                      {plan.adjustments.map((adj: string, i: number) => (
-                        <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                          <CheckCircle className="h-3 w-3 text-emerald-500 flex-shrink-0 mt-0.5" />
-                          {adj}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+              {/* Tab Content Rendering */}
+              {(() => {
+                const activeTab = new URLSearchParams(window.location.search).get('tab') || 'itinerary';
 
-            {/* Budget Breakdown */}
-            {plan.budgetBreakdown && plan.budgetHealth && (
-              <div className="p-4 rounded-2xl bg-card shadow-card">
-                <h3 className="font-display font-semibold text-foreground text-sm mb-3">Budget Breakdown</h3>
-                <div className="space-y-2">
-                  {[
-                    { label: "Accommodation", value: plan.budgetBreakdown.accommodation, icon: Hotel },
-                    { label: "Food", value: plan.budgetBreakdown.food, icon: Utensils },
-                    { label: "Activities", value: plan.budgetBreakdown.activities, icon: Camera },
-                    { label: "Transport", value: plan.budgetBreakdown.transport, icon: MapPin },
-                    { label: "Miscellaneous", value: plan.budgetBreakdown.miscellaneous, icon: ShoppingBag },
-                  ].map((item) => {
-                    if (!item.value) return null;
-                    const total = plan.budgetHealth.totalEstimated || 1;
-                    const pct = (item.value / total) * 100;
+                switch (activeTab) {
+                  case 'itinerary':
                     return (
-                      <div key={item.label} className="flex items-center gap-3">
-                        <item.icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        <div className="flex-1">
-                          <div className="flex justify-between text-xs mb-1 items-center">
-                            <span className="text-foreground font-medium flex items-center gap-2">
-                              {item.label}
-                              {item.label === "Accommodation" && (
-                                <a 
-                                  href={`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(plan.destination || destination)}`} 
-                                  target="_blank" rel="noopener noreferrer"
-                                  className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors font-bold"
-                                >
-                                  Book Hotels
-                                </a>
-                              )}
-                            </span>
-                            <span className="text-primary font-semibold">₹{item.value.toLocaleString()}</span>
-                          </div>
-                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                            <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ delay: 0.3, duration: 0.6 }} className="h-full rounded-full gradient-hero" />
+                      <div className="space-y-6">
+                        <ItineraryDisplay
+                          plan={plan}
+                          activeDayIndex={activeDayIndex}
+                          regeneratingDay={regeneratingDay}
+                          isSwapping={isSwapping}
+                          onRegenerateDay={handleRegenerateDay}
+                          onSwapActivity={handleSwapActivity}
+                        />
+                      </div>
+                    );
+
+                  case 'map':
+                    return (
+                      <div className="bg-card rounded-3xl border border-border/50 shadow-elevated overflow-hidden h-[600px] relative">
+                        <InteractiveMap plan={plan} />
+                        <div className="absolute bottom-6 left-6 right-6 pointer-events-none">
+                          <div className="bg-card/90 backdrop-blur-xl p-4 rounded-2xl shadow-lg border border-border inline-block pointer-events-auto">
+                            <p className="text-xs font-bold text-foreground">Click markers to see details</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">Real-time road paths calculated via Google Directions API</p>
                           </div>
                         </div>
                       </div>
                     );
-                  })}
-                </div>
-                <div className="flex justify-between items-center mt-3 pt-3 border-t border-border">
-                  <span className="text-sm font-semibold text-foreground">Total Estimated</span>
-                  <span className="text-lg font-bold text-gradient-hero">₹{(plan.budgetHealth.totalEstimated || 0).toLocaleString()}</span>
-                </div>
-              </div>
-            )}
 
-            {/* How to Get There */}
-            {plan.travelOptions && plan.travelOptions.length > 0 && (
-              <div className="p-4 rounded-2xl bg-card shadow-card">
-                <h3 className="font-display font-semibold text-foreground text-sm flex items-center gap-2 mb-3">
-                  <Navigation className="h-4 w-4 text-primary" /> How to Get There
-                </h3>
-                <div className="space-y-3">
-                  {plan.travelOptions.map((opt: TravelOption, i: number) => {
-                    const modeLower = opt.mode?.toLowerCase() || '';
-                    const icon = modeLower.includes("train") ? Train
-                      : modeLower.includes("flight") || modeLower.includes("fly") ? Plane
-                        : modeLower.includes("bus") ? Bus : Car;
-                    const Icon = icon;
-                    const isBudget = modeLower.includes("bus") || modeLower.includes("train");
-                    const route = opt.from && opt.to ? `${opt.from} to ${opt.to}` : 'N/A';
+                  case 'budget':
                     return (
-                      <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 * i }}
-                        className="flex items-start gap-3 p-3 rounded-xl bg-muted/30 border border-border/50"
-                      >
-                        <div className={`h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isBudget ? "bg-emerald-500/10" : "bg-primary/10"}`}>
-                          <Icon className={`h-5 w-5 ${isBudget ? "text-emerald-600" : "text-primary"}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center flex-wrap gap-2 mb-0.5">
-                            <span className="text-sm font-semibold text-foreground">{opt.mode}</span>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${isBudget ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/10 text-primary"}`}>
-                              {isBudget ? "Budget" : "Comfort"}
-                            </span>
-                            {modeLower.includes("flight") && (
-                              <a 
-                                href={`https://www.skyscanner.net/transport/flights-from/${encodeURIComponent((opt.from || 'any').toLowerCase())}/to/${encodeURIComponent((opt.to || plan.destination || destination).toLowerCase())}`} 
-                                target="_blank" rel="noopener noreferrer"
-                                className="text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded-full hover:bg-sky-500/20 transition-colors font-bold"
-                              >
-                                Search Flights
-                              </a>
-                            )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Budget Health Meter */}
+                        {budgetInfo && (
+                          <div className="p-6 rounded-[32px] bg-card shadow-card border border-border/50">
+                            <div className="flex items-center gap-3 mb-6">
+                              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                                <TrendingUp className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <h3 className="font-display font-bold text-foreground text-lg">Budget Health</h3>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Real-time Tracking</p>
+                              </div>
+                            </div>
+
+                            <div className="space-y-6">
+                              <div className={`flex items-center gap-3 p-4 rounded-2xl ${budgetStatus.includes("🟢") || budgetStatus.includes("Within") ? "bg-emerald-500/10" : budgetStatus.includes("🟡") || budgetStatus.includes("Near") ? "bg-amber-500/10" : "bg-red-500/10"}`}>
+                                <StatusIcon className={`h-6 w-6 ${getStatusColor()}`} />
+                                <span className={`text-base font-bold ${getStatusColor()}`}>{budgetStatus}</span>
+                              </div>
+
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-end">
+                                  <span className="text-xs font-bold text-muted-foreground uppercase">Utilization</span>
+                                  <span className="text-xl font-black text-foreground">{budgetUsagePercent}%</span>
+                                </div>
+                                <div className="h-4 rounded-full bg-muted overflow-hidden">
+                                  <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${Math.min(budgetUsagePercent, 100)}%` }}
+                                    transition={{ duration: 1 }}
+                                    className={`h-full rounded-full ${budgetUsagePercent <= 70 ? "bg-emerald-500" : budgetUsagePercent <= 90 ? "bg-amber-500" : "bg-red-500"}`}
+                                  />
+                                </div>
+                                <div className="flex justify-between text-xs font-bold mt-2">
+                                  <span className="text-emerald-500">₹{budgetInfo.totalEstimated?.toLocaleString() || "0"} spent</span>
+                                  <span className="text-muted-foreground">Limit: ₹{parseInt(budget).toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground">{route}</p>
-                          <div className="flex items-center gap-3 mt-1.5">
-                            <span className="text-xs font-semibold text-foreground">₹{opt.estimatedCost?.toLocaleString()}</span>
-                            <span className="text-[10px] text-muted-foreground">• {opt.duration}</span>
+                        )}
+
+                        {/* Budget Breakdown */}
+                        {plan.budgetBreakdown && (
+                          <div className="p-6 rounded-[32px] bg-card shadow-card border border-border/50">
+                            <h3 className="font-display font-bold text-foreground text-lg mb-6 flex items-center gap-2">
+                              <PieChart className="h-5 w-5 text-primary" /> Category Analysis
+                            </h3>
+                            <div className="space-y-4">
+                              {[
+                                { label: "Accommodation", value: plan.budgetBreakdown.accommodation, icon: Hotel, color: "bg-blue-500" },
+                                { label: "Food", value: plan.budgetBreakdown.food, icon: Utensils, color: "bg-orange-500" },
+                                { label: "Activities", value: plan.budgetBreakdown.activities, icon: Camera, color: "bg-purple-500" },
+                                { label: "Transport", value: plan.budgetBreakdown.transport, icon: MapPin, color: "bg-emerald-500" },
+                                { label: "Miscellaneous", value: plan.budgetBreakdown.miscellaneous, icon: ShoppingBag, color: "bg-pink-500" },
+                              ].map((item) => {
+                                if (!item.value) return null;
+                                const total = plan.budgetHealth?.totalEstimated || 1;
+                                const pct = (item.value / total) * 100;
+                                return (
+                                  <div key={item.label} className="group">
+                                    <div className="flex justify-between text-xs mb-2 items-center">
+                                      <span className="text-foreground font-bold flex items-center gap-2">
+                                        <item.icon className="h-3.5 w-3.5 text-muted-foreground" />
+                                        {item.label}
+                                      </span>
+                                      <span className="text-foreground font-black">₹{item.value.toLocaleString()}</span>
+                                    </div>
+                                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                                      <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} className={`h-full rounded-full ${item.color}`} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
-                      </motion.div>
+                        )}
+                      </div>
                     );
-                  })}
-                </div>
-              </div>
-            )}
 
-            {/* Local Transport */}
-            {plan.localTransport && plan.localTransport.length > 0 && (
-              <div className="p-4 rounded-2xl bg-card shadow-card">
-                <h3 className="font-display font-semibold text-foreground text-sm flex items-center gap-2 mb-3">
-                  <MapPin className="h-4 w-4 text-coral" /> Getting Around Locally
-                </h3>
-                <div className="space-y-2">
-                  {plan.localTransport.map((item: LocalTransportOption, i: number) => {
-                    const modeLower = item.mode?.toLowerCase() || '';
-                    let Icon = Car;
-                    if (modeLower.includes('bus')) Icon = Bus;
-                    if (modeLower.includes('metro') || modeLower.includes('train')) Icon = TramFront;
-                    if (modeLower.includes('scooter') || modeLower.includes('bike')) Icon = Bike;
-                    if (modeLower.includes('ride-sharing') || modeLower.includes('taxi')) Icon = Car;
-                    if (modeLower.includes('rickshaw') || modeLower.includes('tuk-tuk')) Icon = Car;
-
+                  case 'logistics':
                     return (
-                      <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 * i }}
-                        className="flex items-start gap-3 p-3 rounded-xl bg-muted/30 border border-border/50"
-                      >
-                        <div className="h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-coral/10">
-                          <Icon className="h-5 w-5 text-coral" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold text-foreground">{item.mode}</span>
-                            {item.estimatedDailyCost > 0 && <span className="text-xs font-bold text-primary">~₹{item.estimatedDailyCost.toLocaleString()}/day</span>}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Travel Options */}
+                        {plan.travelOptions && plan.travelOptions.length > 0 && (
+                          <div className="p-6 rounded-[32px] bg-card shadow-card border border-border/50">
+                            <h3 className="font-display font-bold text-foreground text-lg mb-6 flex items-center gap-2">
+                              <Navigation className="h-5 w-5 text-primary" /> How to Get There
+                            </h3>
+                            <div className="space-y-3">
+                              {plan.travelOptions.map((opt: TravelOption, i: number) => {
+                                const modeLower = opt.mode?.toLowerCase() || '';
+                                const Icon = modeLower.includes("train") ? Train : modeLower.includes("flight") ? Plane : Bus;
+                                return (
+                                  <div key={i} className="p-4 rounded-2xl bg-muted/30 border border-border/50 flex items-center gap-4">
+                                    <div className="h-10 w-10 rounded-xl bg-card border border-border flex items-center justify-center"><Icon className="h-5 w-5 text-primary" /></div>
+                                    <div className="flex-1">
+                                      <div className="flex justify-between items-center"><span className="text-sm font-bold text-foreground">{opt.mode}</span><span className="text-[10px] font-black uppercase text-primary bg-primary/10 px-2 py-0.5 rounded-md">{opt.duration}</span></div>
+                                      <p className="text-[10px] text-muted-foreground uppercase font-bold mt-1 tracking-wider">{opt.from} → {opt.to}</p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1">{item.notes}</p>
+                        )}
+
+                        {/* Local Transport */}
+                        {plan.localTransport && (
+                          <div className="p-6 rounded-[32px] bg-card shadow-card border border-border/50">
+                            <h3 className="font-display font-bold text-foreground text-lg mb-6 flex items-center gap-2">
+                              <Car className="h-5 w-5 text-coral" /> Local Mobility
+                            </h3>
+                            <div className="space-y-3">
+                              {plan.localTransport.map((item: LocalTransportOption, i: number) => (
+                                <div key={i} className="p-4 rounded-2xl bg-muted/30 border border-border/50">
+                                  <div className="flex justify-between items-center"><span className="text-sm font-bold text-foreground">{item.mode}</span><span className="text-xs font-black text-primary">₹{item.estimatedDailyCost}/day</span></div>
+                                  <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">{item.notes}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Essentials */}
+                        <div className="p-6 rounded-[32px] bg-card shadow-card border border-border/50">
+                          <h3 className="font-display font-bold text-foreground text-lg mb-6 flex items-center gap-2">
+                            <Backpack className="h-5 w-5 text-primary" /> Packing & Safety
+                          </h3>
+                          <div className="space-y-6">
+                            <div>
+                              <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-3">Checklist</p>
+                              <div className="flex flex-wrap gap-2">
+                                {plan.packingList?.slice(0, 10).map((item: string, i: number) => (
+                                  <span key={i} className="px-3 py-1.5 rounded-xl bg-muted/50 border border-border/50 text-xs font-medium text-foreground">{item}</span>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="pt-6 border-t border-border/50">
+                              <p className="text-[10px] font-black uppercase text-coral tracking-widest mb-3">Safety Protocols</p>
+                              <div className="space-y-2">
+                                {plan.safetyTips?.slice(0, 3).map((tip: string, i: number) => (
+                                  <div key={i} className="flex gap-2 text-xs text-muted-foreground leading-relaxed"><Shield className="h-3.5 w-3.5 text-coral flex-shrink-0" /> {tip}</div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      </motion.div>
+                      </div>
                     );
-                  })}
-                </div>
-              </div>
-            )}
 
-            {/* Live Budget Tracker */}
-            {budgetInfo && budgetInfo.usagePercentage !== undefined && (
-              <div className="sticky top-4 z-40 mb-6 bg-card/90 backdrop-blur-xl p-4 rounded-2xl border border-border/50 shadow-elevated">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <StatusIcon className={`h-5 w-5 ${getStatusColor()}`} />
-                    <span className="font-bold text-sm text-foreground">Estimated Cost: ₹{budgetInfo.totalEstimated?.toLocaleString() || 0}</span>
-                  </div>
-                  <span className="text-xs font-semibold text-muted-foreground">Budget: ₹{budgetInfo.userBudget?.toLocaleString() || budget}</span>
-                </div>
-                <div className="h-2 rounded-full bg-muted overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-1000 ${getStatusColor().replace('text-', 'bg-')}`} 
-                    style={{ width: `${Math.min(100, budgetUsagePercent)}%` }} 
-                  />
-                </div>
-                <p className={`text-[10px] mt-2 font-bold uppercase tracking-wider ${getStatusColor()}`}>{budgetStatus}</p>
-              </div>
-            )}
-
-            {/* Interactive Route Map (Feature 2) */}
-            {plan.itinerary && plan.itinerary.length > 0 && (
-              <div className={`fixed inset-0 z-50 bg-background md:static md:z-auto md:bg-transparent md:block ${showMobileMap ? 'block' : 'hidden'}`}>
-                {showMobileMap && (
-                   <div className="absolute top-0 left-0 w-full p-4 bg-background/80 backdrop-blur z-50 flex justify-between items-center md:hidden border-b border-border">
-                     <h3 className="font-bold text-foreground">Interactive Map</h3>
-                     <button onClick={() => setShowMobileMap(false)} className="p-2 bg-muted rounded-full text-foreground"><X className="h-4 w-4" /></button>
-                   </div>
-                )}
-                <div className={`${showMobileMap ? 'pt-16 h-full' : ''}`}>
-                  <InteractiveMap plan={plan} />
-                </div>
-              </div>
-            )}
-
-            {/* Mobile FABs */}
-            {plan && (
-              <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 md:hidden flex gap-2">
-                <button 
-                  onClick={() => setShowMobileMap(!showMobileMap)}
-                  className="bg-foreground text-background px-5 py-3 rounded-full shadow-elevated flex items-center gap-2 font-bold text-sm hover:scale-105 transition-transform"
-                >
-                  <Map className="h-4 w-4" /> {showMobileMap ? "Hide Map" : "Map"}
-                </button>
-                <button 
-                  onClick={() => setShowTravelMode(true)}
-                  className="bg-emerald-600 text-white px-5 py-3 rounded-full shadow-elevated flex items-center gap-2 font-bold text-sm hover:scale-105 transition-transform"
-                >
-                  <Navigation className="h-4 w-4" /> Travel Mode
-                </button>
-              </div>
-            )}
-
-            {/* Day-wise Itinerary with Images from AI */}
-            <ItineraryDisplay 
-              plan={plan}
-              activeDayIndex={activeDayIndex}
-              regeneratingDay={regeneratingDay}
-              isSwapping={isSwapping}
-              onRegenerateDay={handleRegenerateDay}
-              onSwapActivity={handleSwapActivity}
-            />
-
-
-
-            {/* Packing List */}
-            {plan.packingList && (
-              <div className="p-4 rounded-2xl bg-card shadow-card">
-                <h3 className="font-display font-semibold text-foreground text-sm flex items-center gap-2 mb-3">
-                  <Backpack className="h-4 w-4 text-primary" /> Packing Checklist
-                </h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {plan.packingList.map((item: string, i: number) => {
-                    const isPacked = plan.packedItems?.includes(item);
-                    return (
-                      <label key={i} className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer group">
-                        <input 
-                          type="checkbox" 
-                          checked={isPacked || false}
-                          onChange={() => {
-                            if (!plan) return;
-                            const isPacked = plan.packedItems?.includes(item);
-                            const updatedItems = isPacked 
-                                ? plan.packedItems?.filter(x => x !== item) 
-                                : [...(plan.packedItems || []), item];
-                            const updatedPlan = { ...plan, packedItems: updatedItems };
-                            setPlan(updatedPlan);
-                            if (tripId) updateRemotePlan(updatedPlan);
-                          }}
-                          className="rounded border-border text-primary focus:ring-primary/20 transition-colors" 
-                        />
-                        <span className={`transition-all duration-300 ${isPacked ? 'line-through opacity-50' : 'group-hover:text-foreground'}`}>
-                          {item}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Safety Tips */}
-            {plan.safetyTips && (
-              <div className="p-4 rounded-2xl bg-card shadow-card">
-                <h3 className="font-display font-semibold text-foreground text-sm flex items-center gap-2 mb-3">
-                  <Shield className="h-4 w-4 text-coral" /> Safety Tips
-                </h3>
-                <div className="space-y-2">
-                  {plan.safetyTips.map((tip: string, i: number) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                      <span className="text-coral font-bold">{i + 1}.</span>
-                      {tip}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  default: return null;
+                }
+              })()}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

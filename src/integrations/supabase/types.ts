@@ -46,7 +46,7 @@ export type Database = {
       }
       saved_trips: {
         Row: {
-          budget: string | null
+          budget: number | null
           created_at: string
           days: number | null
           id: string
@@ -60,7 +60,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          budget?: string | null
+          budget?: number | null
           created_at?: string
           days?: number | null
           id?: string
@@ -74,7 +74,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          budget?: string | null
+          budget?: number | null
           created_at?: string
           days?: number | null
           id?: string
@@ -88,6 +88,68 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      trip_cache: {
+        Row: {
+          id: string
+          query_hash: string
+          response_json: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          query_hash: string
+          response_json: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          query_hash?: string
+          response_json?: Json
+          created_at?: string
+        }
+        Relationships: []
+      }
+      request_logs: {
+        Row: {
+          id: string
+          user_id: string | null
+          request_timestamp: string
+          execution_time_ms: number | null
+          cache_hit: boolean | null
+          status_code: number | null
+          error_details: string | null
+          metadata: Json | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          request_timestamp?: string
+          execution_time_ms?: number | null
+          cache_hit?: boolean | null
+          status_code?: number | null
+          error_details?: string | null
+          metadata?: Json | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          request_timestamp?: string
+          execution_time_ms?: number | null
+          cache_hit?: boolean | null
+          status_code?: number | null
+          error_details?: string | null
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       trip_expenses: {
         Row: {
