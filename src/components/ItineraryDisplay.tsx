@@ -53,21 +53,25 @@ const ItineraryDisplay = ({
             ? "bg-sky-50 dark:bg-sky-950/30 border-sky-300 dark:border-sky-800" 
             : "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/10"
         }`}>
-          <CloudSun className={`h-6 w-6 mt-0.5 ${
-            plan.weatherNote.toLowerCase().includes("rain") ? "text-sky-600" : "text-amber-600"
-          }`} />
+          <div className="h-10 w-10 rounded-xl bg-white/50 backdrop-blur-sm flex items-center justify-center shrink-0 border border-white/50 shadow-sm">
+            <CloudSun className={`h-6 w-6 ${
+              plan.weatherNote.toLowerCase().includes("rain") ? "text-sky-600 animate-pulse" : "text-amber-600"
+            }`} />
+          </div>
           <div>
-            <h4 className={`font-bold text-sm mb-0.5 ${
+            <h4 className={`font-display font-bold text-sm mb-0.5 ${
               plan.weatherNote.toLowerCase().includes("rain") ? "text-sky-900 dark:text-sky-300" : "text-amber-900 dark:text-amber-500"
             }`}>
-              {plan.weatherNote.toLowerCase().includes("rain") ? "Weather Alert: Rain Expected" : "Trip Weather & Climate"}
+              {plan.weatherNote.toLowerCase().includes("unavailable") ? "Destination Climate Guide" : plan.weatherNote.toLowerCase().includes("rain") ? "Weather Alert: Rain Expected" : "Trip Weather & Climate"}
             </h4>
-            <p className={`text-xs font-semibold leading-relaxed ${
+            <p className={`text-[13px] font-medium leading-relaxed ${
               plan.weatherNote.toLowerCase().includes("rain") ? "text-sky-800/80 dark:text-sky-200/80" : "text-amber-800/80 dark:text-amber-200/80"
             }`}>
-              {plan.weatherNote}
+              {plan.weatherNote.toLowerCase().includes("unavailable") 
+                ? "Live forecast is currently refreshing. Generally, this region offers beautiful sightseeing conditions this time of year!" 
+                : plan.weatherNote}
               {plan.weatherNote.toLowerCase().includes("rain") && (
-                <><br/>Open your AI Assistant (bottom right) to quickly ask for indoor alternatives if your plans get washed out!</>
+                <><br/><span className="mt-1 block text-xs font-bold opacity-80 italic">✨ Pro Tip: Ask the AI Assistant for indoor backup activities!</span></>
               )}
             </p>
           </div>

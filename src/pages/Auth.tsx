@@ -8,10 +8,12 @@ import { supabase } from "@/integrations/supabase/client";
 
 const friendlyAuthError = (msg: string) => {
   if (!msg) return "Something went wrong. Please try again.";
-  if (msg.toLowerCase().includes("invalid login")) return "Incorrect email or password. Please try again.";
-  if (msg.toLowerCase().includes("email not confirmed")) return "Please check your email and confirm your account first.";
-  if (msg.toLowerCase().includes("already registered")) return "An account with this email already exists. Try signing in.";
-  if (msg.toLowerCase().includes("weak password")) return "Password must be at least 6 characters.";
+  const lower = msg.toLowerCase();
+  if (lower.includes("invalid login")) return "Incorrect email or password. Please try again.";
+  if (lower.includes("email not confirmed")) return "Please check your email and confirm your account to sign in.";
+  if (lower.includes("already registered")) return "An account with this email already exists. Try signing in.";
+  if (lower.includes("weak password")) return "Password must be at least 6 characters.";
+  if (lower.includes("rate limit")) return "Too many attempts. Please wait a moment.";
   return msg;
 };
 
@@ -42,6 +44,7 @@ const Auth = () => {
       if (error) {
         toast({ title: "Login failed", description: friendlyAuthError(error), variant: "destructive" });
       } else {
+        toast({ title: "Welcome back!", description: "Successfully signed in." });
         navigate("/");
       }
     } else {
@@ -161,6 +164,7 @@ const Auth = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="email"
                   className="w-full pl-10 pr-4 py-3 rounded-xl bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-shadow"
                 />
               </div>
@@ -172,6 +176,7 @@ const Auth = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete={isLogin ? "current-password" : "new-password"}
                   minLength={6}
                   className="w-full pl-10 pr-10 py-3 rounded-xl bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-shadow"
                 />

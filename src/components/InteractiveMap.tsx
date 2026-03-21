@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow, DirectionsRenderer } from '@react-google-maps/api';
 import type { TripPlan, TripDay, TripActivity } from '@/types/trip-plan';
-import { MapPin, Loader2, Navigation, Clock, Info } from 'lucide-react';
+import { MapPin, Loader2, Navigation, Clock, Info, Map } from 'lucide-react';
 
 interface InteractiveMapProps {
   plan: TripPlan;
@@ -22,6 +22,8 @@ const premiumMapStyles = [
   { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#c9c9c9" }] }
 ];
 
+const libraries: ("places")[] = ["places"];
+
 const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
   const [selectedPoint, setSelectedPoint] = useState<any>(null);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
@@ -29,7 +31,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
   
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
+    libraries: libraries
   });
 
   const points = useMemo(() => {
@@ -85,11 +88,23 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
 
   if (loadError) {
     return (
-      <div className="w-full mt-6 mb-8 h-[450px] rounded-3xl flex items-center justify-center bg-muted text-muted-foreground border border-dashed border-border p-10 text-center">
-        <div>
-          <MapPin className="h-10 w-10 mx-auto mb-4 opacity-20" />
-          <p className="font-semibold">Map currently unavailable</p>
+      <div className="w-full mt-6 mb-8 h-[450px] rounded-3xl overflow-hidden shadow-elevated border border-border/50 bg-card relative">
+        <div className="absolute inset-0 bg-muted/40 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-12 text-center">
+          <div className="h-16 w-16 rounded-2xl bg-white shadow-xl flex items-center justify-center mb-6 ring-4 ring-primary/5">
+            <Map className="h-8 w-8 text-primary/40" />
+          </div>
+          <h3 className="font-display font-bold text-xl text-foreground mb-2">Interactive Travel Map</h3>
+          <p className="text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
+            Live route mapping is currently in preview mode. You can still access full turn-by-turn directions via the Google Maps link for this trip.
+          </p>
+          <button 
+            onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(plan.destination)}`, '_blank')}
+            className="mt-6 px-6 py-2.5 rounded-xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+          >
+            Open in Google Maps
+          </button>
         </div>
+        <div className="absolute inset-0 grayscale opacity-20 pointer-events-none bg-[url('https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=2000')] bg-cover bg-center" />
       </div>
     );
   }

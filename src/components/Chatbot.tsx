@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, X, Bot, Sparkles } from 'lucide-react';
+import { Send, X, Sparkles, User, Trash2, Maximize2, Minimize2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { streamChatResponse } from '@/lib/stream-ai';
 import type { TripPlan } from '@/types/trip-plan';
 
@@ -15,16 +16,10 @@ interface ChatbotProps {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 }
 
-const suggestedPrompts = [
-  "What are some good restaurants near my hotel?",
-  "Summarize my plan for Day 2.",
-  "What's the weather like?",
-  "Suggest a good spot for photography.",
-];
-
 const Chatbot = ({ plan, onClose, messages, setMessages }: ChatbotProps) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -80,77 +75,113 @@ const Chatbot = ({ plan, onClose, messages, setMessages }: ChatbotProps) => {
   };
 
   return (
-    <div className="fixed bottom-24 right-5 w-80 h-[28rem] bg-card shadow-xl rounded-2xl flex flex-col z-50 border">
-      <div className="p-4 flex items-center justify-between border-b">
-        <h3 className="font-semibold text-lg flex items-center gap-2"><Bot className="h-5 w-5 text-primary" /> AI Assistant</h3>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-      <div className="flex-1 p-4 overflow-y-auto">
-        <div className="space-y-4">
-            {messages.map((msg, index) => (
-            <div key={index} className={`flex items-end gap-2 ${msg.isUser ? 'justify-end' : 'justify-start'}`}>
-                {!msg.isUser && (
-                    <div className="h-7 w-7 rounded-full gradient-hero flex items-center justify-center flex-shrink-0">
-                        <Bot className="h-4 w-4 text-primary-foreground" />
-                    </div>
-                )}
-                <div className={`p-3 rounded-2xl max-w-[85%] text-sm ${msg.isUser ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-muted rounded-bl-none'}`}>
-                {msg.text}
-                </div>
+    <motion.div
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 20, scale: 0.95 }}
+      transition={{ type: "spring", damping: 25, stiffness: 200 }}
+      className={`fixed bottom-24 right-5 ${isExpanded ? 'w-[calc(100vw-40px)] md:w-[500px] h-[600px]' : 'w-80 md:w-96 h-[500px]'} bg-card/95 backdrop-blur-xl shadow-2xl rounded-3xl flex flex-col z-50 border border-primary/10 overflow-hidden ring-1 ring-white/20`}
+    >
+      {/* Header */}
+      <div className="p-4 flex items-center justify-between border-b border-primary/5 bg-primary/5">
+        <div className="flex items-center gap-2.5">
+          <div className="h-9 w-9 rounded-xl gradient-hero flex items-center justify-center shadow-lg shadow-primary/20 ring-2 ring-white/50">
+            <Sparkles className="h-5 w-5 text-primary-foreground animate-pulse" />
+          </div>
+          <div>
+            <h3 className="font-display font-bold text-sm tracking-tight text-foreground">AI Assistant</h3>
+            <div className="flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Active now</span>
             </div>
-            ))}
-            {isLoading && messages[messages.length-1].text === '' && (
-                 <div className="flex items-end gap-2 justify-start">
-                    <div className="h-7 w-7 rounded-full gradient-hero flex items-center justify-center flex-shrink-0">
-                        <Bot className="h-4 w-4 text-primary-foreground" />
-                    </div>
-                    <div className="p-3 rounded-2xl max-w-[85%] text-sm bg-muted rounded-bl-none">
-                        <div className="h-2 w-2 animate-pulse bg-muted-foreground rounded-full" />
-                    </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <button 
+            onClick={() => setIsExpanded(!isExpanded)} 
+            className="p-1.5 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors transition-all hidden md:block"
+          >
+            {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
+          <button 
+            onClick={() => { setMessages([{ text: "Hello! I'm your AI trip assistant. Ask me anything about your plan.", isUser: false }]); }}
+            className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors transition-all"
+            title="Clear Chat"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors transition-all">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 p-5 overflow-y-auto scrollbar-hide bg-gradient-to-b from-transparent to-primary/5">
+        <div className="space-y-6">
+          <AnimatePresence initial={false}>
+            {messages.map((msg, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, x: msg.isUser ? 10 : -10, y: 5 }}
+                animate={{ opacity: 1, x: 0, y: 0 }}
+                className={`flex gap-3 ${msg.isUser ? 'flex-row-reverse' : 'flex-row'}`}
+              >
+                <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${msg.isUser ? 'bg-primary text-primary-foreground' : 'bg-white border ring-1 ring-primary/10 text-primary'}`}>
+                  {msg.isUser ? <User className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
                 </div>
-            )}
+                <div className={`relative group max-w-[80%] ${msg.isUser ? 'text-right' : 'text-left'}`}>
+                  {!msg.isUser && (
+                    <span className="text-[10px] font-bold text-primary/60 uppercase tracking-widest block mb-1 ml-1">Planzo AI</span>
+                  )}
+                  <div className={`p-3.5 rounded-2xl text-[13px] leading-relaxed transition-all ${
+                    msg.isUser 
+                      ? 'gradient-hero text-white rounded-tr-none shadow-md shadow-primary/10' 
+                      : 'bg-white border border-primary/5 text-foreground rounded-tl-none font-medium'
+                  }`}>
+                    {msg.text || (
+                      <div className="flex gap-1 py-1">
+                        <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                        <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                        <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce"></span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
         <div ref={messagesEndRef} />
       </div>
-      <div className="p-3 border-t bg-card">
-        {messages.filter(m => m.isUser).length === 0 && (
-            <div className="mb-3">
-                <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-primary" /> Try asking...</p>
-                <div className="flex flex-wrap gap-1.5">
-                    {suggestedPrompts.map((prompt, i) => (
-                        <button 
-                            key={i}
-                            onClick={() => sendMessage(prompt)}
-                            className="px-3 py-1 text-[11px] bg-muted text-muted-foreground rounded-full hover:bg-primary/10 hover:text-primary transition-colors"
-                        >
-                            {prompt}
-                        </button>
-                    ))}
-                </div>
-            </div>
-        )}
-        <div className="relative">
+
+      {/* Input Area */}
+      <div className="p-4 bg-background/50 border-t border-primary/5">
+        <div className="relative flex items-center gap-2 bg-white/80 dark:bg-muted/80 backdrop-blur-md border border-primary/10 rounded-2xl p-1.5 pl-4 shadow-sm focus-within:ring-2 focus-within:ring-primary/20 transition-all">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && !isLoading && (e.preventDefault(), handleSend())}
-            placeholder="Ask a question..."
+            placeholder="Ask a question about your trip..."
             rows={1}
-            className="w-full bg-muted rounded-lg px-4 py-2.5 pr-12 text-sm outline-none resize-none"
+            className="flex-1 bg-transparent py-2 text-sm outline-none resize-none placeholder:text-muted-foreground/50 whitespace-pre-wrap max-h-32"
             disabled={isLoading}
           />
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={handleSend}
             disabled={isLoading || !input.trim()}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 h-7 w-7 rounded-md bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-50 transition-opacity"
+            className="h-9 w-9 rounded-xl gradient-hero text-white flex items-center justify-center disabled:opacity-30 shadow-lg shadow-primary/20 transition-all flex-shrink-0"
           >
-            <Send className="h-3.5 w-3.5" />
-          </button>
+            <Send className="h-4 w-4" />
+          </motion.button>
         </div>
+        <p className="text-[9px] text-center mt-3 text-muted-foreground/60 font-medium uppercase tracking-[0.2em]">
+          ✨ Intelligent Itinerary Assistance
+        </p>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

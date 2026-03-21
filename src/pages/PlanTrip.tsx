@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import Chatbot from "@/components/Chatbot";
-import PlanSkeleton from "@/pages/PlanSkeleton";
+// import PlanSkeleton from "@/pages/PlanSkeleton";
 import TripPDF from "@/components/TripPDF";
 import type { LocalTransportOption, TripActivity, TripDay, TripPlan, TravelOption } from "@/types/trip-plan";
 import { getPexelsImage } from "@/lib/pexels";
@@ -281,7 +281,7 @@ const PlanTrip = () => {
         throw new Error(errorData.error || `Server error: ${response.status}`);
       }
 
-      let data: TripPlan = await response.json();
+      const data: TripPlan = await response.json();
 
       // Enrich images dynamically on the frontend to avoid duplicates
       if (data.itinerary) {
@@ -364,7 +364,7 @@ const PlanTrip = () => {
         throw new Error(errorData.error || `Server error: ${response.status}`);
       }
 
-      let data: TripDay = await response.json();
+      const data: TripDay = await response.json();
 
       let heroImage = data.heroImage;
       if (data.activities) {

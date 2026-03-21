@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import Explore from "./pages/Explore";
 import PlanTrip from "./pages/PlanTrip";
 import Profile from "./pages/Profile";
+import SettingsPage from "./pages/SettingsPage";
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
 import DestinationDetail from "./pages/DestinationDetail";
@@ -33,6 +34,7 @@ const App = () => (
                 <Route path="/explore" element={<Explore />} />
                 <Route path="/plan" element={<PlanTrip />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/destination/:id" element={<DestinationDetail />} />
                 <Route path="/trip/:tripId/expenses" element={<TripExpenses />} />
                 <Route path="/trip/:tripId/journal" element={<TripJournal />} />

@@ -17,6 +17,7 @@ interface JournalEntry {
   mood: string;
   photos: string[];
   created_at: string;
+  date: string;
 }
 
 const moodOptions = [
@@ -48,8 +49,11 @@ const TripJournal = () => {
   const [showStory, setShowStory] = useState(false);
 
   useEffect(() => {
-    fetchTripAndEntries();
-  }, [tripId]);
+    const init = async () => {
+      await fetchTripAndEntries();
+    };
+    init();
+  }, [tripId, user]);
 
   const fetchTripAndEntries = async () => {
     if (!tripId || !user) { setLoading(false); return; }
@@ -69,7 +73,9 @@ const TripJournal = () => {
     if (stored) {
       try {
         setEntries(JSON.parse(stored));
-      } catch {}
+      } catch (e) {
+        console.error("Journal loading error", e);
+      }
     }
 
     setLoading(false);
@@ -93,6 +99,7 @@ const TripJournal = () => {
       mood: newMood,
       photos: [],
       created_at: new Date().toISOString(),
+      date: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
     };
 
     const updated = [...entries, entry].sort((a, b) => a.day - b.day || new Date(a.created_at).getTime() - new Date(b.created_at).getTime());

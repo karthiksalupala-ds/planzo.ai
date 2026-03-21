@@ -7,7 +7,6 @@ import DestinationCard from "@/components/DestinationCard";
 import SmartCard from "@/components/SmartCard";
 import CategoryChip from "@/components/CategoryChip";
 import { indianDestinations } from "@/data/destinations";
-import ExploreMap from "@/components/ExploreMap";
 
 const categories = [
   { icon: Compass, label: "All" },
@@ -332,17 +331,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Mini Explore Map */}
-      <section className="mt-10 px-5 md:container">
-        <div className="mb-6">
-          <h2 className="font-display text-xl font-bold text-foreground flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-coral" />
-            Explore India
-          </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Interactive map to discover trending spots</p>
-        </div>
-        <ExploreMap destinations={indianDestinations} />
-      </section>
+
 
       {/* Quick Access */}
       <section className="mt-8 px-5 md:container">
