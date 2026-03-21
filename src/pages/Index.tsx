@@ -227,30 +227,6 @@ const itemVariants = {
   }
 };
 
-const CommunityTicker = () => {
-  const messages = [
-    "✨ Arjun just planned a 4-day adventure in Manali",
-    "✨ Priya is exploring street food in Old Delhi",
-    "✨ Rahul generated a romantic getaway to Udaipur",
-    "✨ Sneha is packing for the Kerala Backwaters",
-    "✨ Aditi just booked flights to Leh Ladakh",
-    "✨ Vikram built a 7-day royal tour of Rajasthan",
-    "✨ Aisha generated a budget backpacking trip to Hampi"
-  ];
-  return (
-    <div className="w-full bg-primary/10 border-b border-primary/20 py-3 overflow-hidden flex items-center relative z-20 backdrop-blur-md shadow-sm">
-      <motion.div
-        animate={{ x: ["0%", "-50%"] }}
-        transition={{ repeat: Infinity, duration: 45, ease: "linear" }}
-        className="flex whitespace-nowrap gap-16 text-xs md:text-sm font-bold text-primary/90 shrink-0 w-max pr-16"
-      >
-        {messages.map((m, i) => <span key={i}>{m}</span>)}
-        {messages.map((m, i) => <span key={`dup-${i}`}>{m}</span>)}
-      </motion.div>
-    </div>
-  );
-};
-
 const Index = () => {
   const [activeCategory, setActiveCategory] = useState("All");
   const navigate = useNavigate();
@@ -310,9 +286,6 @@ const Index = () => {
           <svg className="h-4 w-4 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
         </div>
       </section>
-
-      {/* Community Ticker */}
-      <CommunityTicker />
 
       {/* Categories */}
       <section className="mt-8 px-5 md:container">

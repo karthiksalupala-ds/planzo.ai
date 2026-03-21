@@ -46,14 +46,29 @@ const ItineraryDisplay = ({
 
   return (
     <div className="space-y-6 mt-8">
-      {/* Weather Alert Banner */}
-      {plan.weatherNote?.toLowerCase().includes("rain") && (
-        <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-300 dark:border-sky-800 p-4 rounded-2xl flex items-start gap-3 shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
-          <CloudSun className="h-6 w-6 text-sky-600 dark:text-sky-400 flex-shrink-0 mt-0.5" />
+      {/* Weather Header Section */}
+      {plan.weatherNote && (
+        <div className={`p-4 rounded-2xl border flex items-start gap-3 shadow-sm transition-all duration-500 ${
+          plan.weatherNote.toLowerCase().includes("rain") 
+            ? "bg-sky-50 dark:bg-sky-950/30 border-sky-300 dark:border-sky-800" 
+            : "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/10"
+        }`}>
+          <CloudSun className={`h-6 w-6 mt-0.5 ${
+            plan.weatherNote.toLowerCase().includes("rain") ? "text-sky-600" : "text-amber-600"
+          }`} />
           <div>
-            <h4 className="font-bold text-sky-900 dark:text-sky-300 text-sm mb-0.5">Weather Alert: Rain Expected</h4>
-            <p className="text-xs font-semibold text-sky-800/80 dark:text-sky-200/80 leading-relaxed">
-              {plan.weatherNote} <br/>Open your AI Assistant (bottom right) to quickly ask for indoor alternatives if your plans get washed out!
+            <h4 className={`font-bold text-sm mb-0.5 ${
+              plan.weatherNote.toLowerCase().includes("rain") ? "text-sky-900 dark:text-sky-300" : "text-amber-900 dark:text-amber-500"
+            }`}>
+              {plan.weatherNote.toLowerCase().includes("rain") ? "Weather Alert: Rain Expected" : "Trip Weather & Climate"}
+            </h4>
+            <p className={`text-xs font-semibold leading-relaxed ${
+              plan.weatherNote.toLowerCase().includes("rain") ? "text-sky-800/80 dark:text-sky-200/80" : "text-amber-800/80 dark:text-amber-200/80"
+            }`}>
+              {plan.weatherNote}
+              {plan.weatherNote.toLowerCase().includes("rain") && (
+                <><br/>Open your AI Assistant (bottom right) to quickly ask for indoor alternatives if your plans get washed out!</>
+              )}
             </p>
           </div>
         </div>

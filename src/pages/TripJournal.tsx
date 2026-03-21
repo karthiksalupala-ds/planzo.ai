@@ -8,6 +8,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import StoryPreview from "@/components/StoryPreview";
 
 interface JournalEntry {
   id: string;
@@ -44,6 +45,7 @@ const TripJournal = () => {
   const [newText, setNewText] = useState("");
   const [newMood, setNewMood] = useState("😊");
   const [saving, setSaving] = useState(false);
+  const [showStory, setShowStory] = useState(false);
 
   useEffect(() => {
     fetchTripAndEntries();
@@ -52,7 +54,6 @@ const TripJournal = () => {
   const fetchTripAndEntries = async () => {
     if (!tripId || !user) { setLoading(false); return; }
 
-    // Fetch trip details
     const { data: trip } = await supabase
       .from("saved_trips")
       .select("title, days, plan_data")
@@ -64,7 +65,6 @@ const TripJournal = () => {
       setTripDays(trip.days || 3);
     }
 
-    // Load journal entries from localStorage (we'll use localStorage to avoid needing a DB migration)
     const stored = localStorage.getItem(`journal_${tripId}`);
     if (stored) {
       try {
@@ -137,11 +137,25 @@ const TripJournal = () => {
           </button>
         </div>
         <div className="absolute bottom-4 left-5 right-5">
-          <div className="flex items-center gap-2 mb-1">
-            <BookOpen className="h-5 w-5 text-primary" />
-            <h1 className="font-display text-xl font-bold text-foreground">Trip Journal</h1>
+          <div className="flex flex-col md:flex-row justify-between items-end gap-2">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <BookOpen className="h-5 w-5 text-primary" />
+                <h1 className="font-display text-xl font-bold text-foreground">Trip Journal</h1>
+              </div>
+              <p className="text-sm text-muted-foreground">{tripTitle} · {tripDays} days</p>
+            </div>
+            
+            {entries.length > 0 && (
+              <button
+                onClick={() => setShowStory(true)}
+                className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-xs flex items-center gap-2 shadow-lg hover:scale-105 transition-all"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Generate Story
+              </button>
+            )}
           </div>
-          <p className="text-sm text-muted-foreground">{tripTitle} · {tripDays} days</p>
         </div>
       </div>
 
@@ -329,6 +343,16 @@ const TripJournal = () => {
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {showStory && (
+          <StoryPreview
+            entries={entries}
+            destination={tripTitle}
+            onClose={() => setShowStory(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

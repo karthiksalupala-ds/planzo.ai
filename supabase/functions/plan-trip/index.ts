@@ -12,6 +12,7 @@ interface TripRequest {
   budget?: number;
   travelers?: number;
   days?: number;
+  vibe?: string;
 }
 
 interface TripResponse {
@@ -50,6 +51,7 @@ interface TripResponse {
   safetyTips: string[];
   bestTimeToVisit: string;
   weatherNote: string;
+  vibe: string;
 }
 
 interface AIChatCompletionResponse {
@@ -99,19 +101,26 @@ async function generateTrip(req: TripRequest): Promise<TripResponse> {
   const AI_API_KEY = Deno.env.get("AI_API_KEY");
   if (!AI_API_KEY) throw new Error("AI_API_KEY not configured");
 
-  const systemPrompt = `You are a professional travel planning AI. Given a user's travel query, generate a comprehensive trip plan.
+  const systemPrompt = `You are a professional travel planning AI. Given a user's travel query and a "vibe" preference, generate a comprehensive trip plan.
+Vibe Context:
+- Standard: Balanced and well-rounded.
+- Budget-Friendly: Focus on free activities, hostels/affordable stays, and public transport.
+- Luxury: Focus on high-end hotels, fine dining, and exclusive experiences.
+- Adventure: Focus on trekking, sports, wild nature, and high-energy activities.
+
 Return ONLY valid JSON matching this exact schema (no markdown, no explanation):
 {
   "destination": "string",
   "summary": "string (2-3 sentence overview)",
+  "vibe": "${req.vibe || 'Standard'}",
   "mood": "string (e.g. Adventurous, Relaxing, Cultural)",
   "budgetBreakdown": { "accommodation": number, "food": number, "transport": number, "activities": number, "miscellaneous": number },
   "travelOptions": [{ "mode": "string", "from": "string", "to": "string", "estimatedCost": number, "duration": "string" }],
-  "localTransport": [{ "mode": "string", "estimatedDailyCost": number, "notes": "string (e.g., 'Best for short distances, convenient but can be slow in traffic.')" }],
+  "localTransport": [{ "mode": "string", "estimatedDailyCost": number, "notes": "string" }],
   "itinerary": [{ 
     "day": number, 
     "title": "string", 
-    "activities": [{ "name": "string", "place": "string", "imageSearchQuery": "string (descriptive, for Pexels API)", "lat": number, "lng": number }],
+    "activities": [{ "name": "string", "place": "string", "imageSearchQuery": "string", "lat": number, "lng": number }],
     "meals": { "breakfast": "string", "lunch": "string", "dinner": "string" },
     "tips": "string"
   }],
@@ -120,8 +129,14 @@ Return ONLY valid JSON matching this exact schema (no markdown, no explanation):
   "bestTimeToVisit": "string",
   "map": { "lat": number, "lng": number }
 }
-Budget values must be in INR (₹). Be specific with place names, coordinates, and image search queries. Generate ${req.days || 3} days of itinerary for ${req.travelers || 2} travelers.
-If the query contains multiple destinations separated by → (e.g. "Goa → Hampi → Coorg"), create an itinerary that covers all destinations in order. Include inter-city travel days between destinations with travel mode, cost, and duration. Distribute the total days across all destinations proportionally.`;
+
+Important for Packing List:
+Generate a SMARTER packing list (10-15 items) that is highly relevant to:
+1. The destination's typical climate/weather.
+2. The selected Vibe ("${req.vibe || 'Standard'}").
+3. The planned activities in the itinerary.
+
+Budget values must be in INR (₹). Be specific with place names, coordinates, and image search queries. Generate ${req.days || 3} days of itinerary for ${req.travelers || 2} travelers.`;
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",

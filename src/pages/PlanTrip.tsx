@@ -71,6 +71,7 @@ const PlanTrip = () => {
   const [days, setDays] = useState(isNaN(parsedDays) ? 3 : parsedDays);
   const [travelers, setTravelers] = useState(2);
   const [startDate, setStartDate] = useState("");
+  const [vibe, setVibe] = useState("Standard");
 
   // Destination autocomplete
   const [autocompleteIndex, setAutocompleteIndex] = useState<number | null>(null);
@@ -265,13 +266,14 @@ const PlanTrip = () => {
           "Authorization": `Bearer ${token}`,
           "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({
-          query: destination,
-          budget,
-          days: days.toString(),
-          travelers: travelers.toString(),
-          mood: activeMood,
-        }),
+          body: JSON.stringify({
+            query: destination,
+            budget,
+            days: days.toString(),
+            travelers: travelers.toString(),
+            mood: activeMood,
+            vibe,
+          }),
       });
 
       if (!response.ok) {
@@ -345,15 +347,16 @@ const PlanTrip = () => {
           "Authorization": `Bearer ${token}`,
           "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({
-          existingPlan: plan,
-          dayToRegenerate: dayIndex,
-          query: destination,
-          budget,
-          days: days.toString(),
-          travelers: travelers.toString(),
-          mood: activeMood,
-        }),
+          body: JSON.stringify({
+            existingPlan: plan,
+            dayToRegenerate: dayIndex,
+            query: destination,
+            budget,
+            days: days.toString(),
+            travelers: travelers.toString(),
+            mood: activeMood,
+            vibe,
+          }),
       });
 
       if (!response.ok) {
@@ -578,7 +581,7 @@ const PlanTrip = () => {
         </div>
 
         {/* Quick Options */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-4">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1">
               <IndianRupee className="h-3 w-3" /> Budget (₹)
@@ -631,6 +634,21 @@ const PlanTrip = () => {
               onChange={(e) => setStartDate(e.target.value)}
               className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
             />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1">
+              <Sparkles className="h-3 w-3 text-primary" /> Vibe
+            </label>
+            <select
+              value={vibe}
+              onChange={(e) => setVibe(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20 appearance-none font-medium cursor-pointer"
+            >
+              <option value="Standard">Standard</option>
+              <option value="Budget">Budget</option>
+              <option value="Luxury">Luxury</option>
+              <option value="Adventure">Adventure</option>
+            </select>
           </div>
         </div>
 
@@ -686,20 +704,31 @@ const PlanTrip = () => {
             {/* Header / Summary Card */}
             <div className="p-0 rounded-[32px] bg-card shadow-elevated overflow-hidden border border-border/50 mb-8">
               {plan.destinationImage && (
-                <div className="relative h-64 overflow-hidden">
+                <div className="relative h-72 overflow-hidden">
                   <img src={plan.destinationImage} alt={plan.destination} className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-card via-card/20 to-transparent" />
                   <div className="absolute bottom-6 left-8 right-8">
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                      <div>
-                        <h2 className="font-display font-black text-4xl text-foreground tracking-tight">{plan.destination}</h2>
-                        <div className="flex items-center gap-3 mt-2">
-                          <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest">{activeMood} Adventure</span>
-                          <span className="px-3 py-1 rounded-full bg-muted text-muted-foreground text-[10px] font-bold uppercase tracking-widest">{days} Days</span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          {plan.weatherNote && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/20 backdrop-blur-md border border-white/30 text-white text-[10px] font-bold">
+                              <CloudSun className="h-3 w-3" />
+                              {(plan.weatherNote as string).split('.')[0]}
+                            </div>
+                          )}
+                        </div>
+                        <h2 className="font-display font-black text-4xl text-white tracking-tight drop-shadow-md">{plan.destination}</h2>
+                        <div className="flex items-center gap-3 mt-3">
+                          <span className="px-3 py-1 rounded-full bg-primary/20 backdrop-blur-md border border-primary/30 text-primary-foreground text-[10px] font-bold uppercase tracking-widest">{activeMood} Adventure</span>
+                          <span className="px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-[10px] font-bold uppercase tracking-widest">{days} Days</span>
+                          {plan.vibe && (
+                            <span className="px-3 py-1 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-500/30 text-blue-200 text-[10px] font-bold uppercase tracking-widest">{plan.vibe}</span>
+                          )}
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={handleShareTrip} className="p-3 rounded-2xl bg-card border border-border hover:bg-muted transition-colors shadow-sm"><Share2 className="h-5 w-5 text-foreground" /></button>
+                        <button onClick={handleShareTrip} className="p-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 text-white transition-colors shadow-sm"><Share2 className="h-5 w-5" /></button>
                         <button onClick={handleSaveTrip} disabled={saving} className="px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow-lg hover:opacity-90 transition-all flex items-center gap-2">
                           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                           {saving ? "Saving..." : tripId ? "Update Plan" : "Save Trip"}
