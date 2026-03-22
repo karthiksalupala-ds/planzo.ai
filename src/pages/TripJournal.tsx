@@ -46,6 +46,7 @@ const TripJournal = () => {
   const [newText, setNewText] = useState("");
   const [newMood, setNewMood] = useState("😊");
   const [saving, setSaving] = useState(false);
+  const [isGeneratingAIText, setIsGeneratingAIText] = useState(false);
   const [showStory, setShowStory] = useState(false);
 
   useEffect(() => {
@@ -113,6 +114,23 @@ const TripJournal = () => {
     const updated = entries.filter(e => e.id !== id);
     saveEntries(updated);
     toast({ title: "Entry removed" });
+  };
+
+  const handleMagicWrite = () => {
+    setIsGeneratingAIText(true);
+    setTimeout(() => {
+      const templates = [
+        `Today was absolutely incredible in ${tripTitle || "this beautiful place"}. We stumbled upon a hidden gem that wasn't even on the itinerary. The local vibe here is just magic, and I couldn't have asked for a better day.`,
+        `Spent the entire day exploring the heart of ${tripTitle || "the city"}. The local food was out of this world, and the weather stayed perfect. Truly a memorable experience.`,
+        `Feeling completely relaxed after today's adventures in ${tripTitle || "nature"}. We took things slow, soaked in the culture, and caught a stunning sunset to cap it off.`,
+        `Day ${selectedDay} exceeded all expectations. The energy of ${tripTitle || "the streets"} is contagious. We walked for miles but every step was worth it.`,
+        `A travel day full of surprises! Found a quiet spot away from the crowds to just breathe and enjoy the scenery. ${tripTitle || "This place"} has a special kind of charm.`
+      ];
+      const randomText = templates[Math.floor(Math.random() * templates.length)];
+      setNewText(randomText);
+      setIsGeneratingAIText(false);
+      toast({ title: "✨ AI Journal Entry Generated" });
+    }, 1500);
   };
 
   if (loading) {
@@ -238,9 +256,19 @@ const TripJournal = () => {
 
                 {/* Text */}
                 <div>
-                  <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-2 block">
-                    ✍️ What happened today?
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider block">
+                      ✍️ What happened today?
+                    </label>
+                    <button 
+                      onClick={handleMagicWrite}
+                      disabled={isGeneratingAIText}
+                      className="text-[10px] font-bold text-primary flex items-center gap-1 hover:bg-primary/10 px-2 py-1 rounded-lg transition-colors border border-primary/20 bg-primary/5"
+                    >
+                      {isGeneratingAIText ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      AI MAGIC WRITE
+                    </button>
+                  </div>
                   <textarea
                     value={newText}
                     onChange={e => setNewText(e.target.value)}

@@ -6,7 +6,7 @@ import AISearchBar from "@/components/AISearchBar";
 import DestinationCard from "@/components/DestinationCard";
 import SmartCard from "@/components/SmartCard";
 import CategoryChip from "@/components/CategoryChip";
-import { indianDestinations } from "@/data/destinations";
+import { getAllDestinations } from "@/data/destinations";
 
 const categories = [
   { icon: Compass, label: "All" },
@@ -22,6 +22,33 @@ const smartCards = [
   { icon: Utensils, title: "Food Spots", description: "Street food, thalis, and local delicacies", color: "coral" as const },
   { icon: Hotel, title: "Hotels", description: "Best rated stays matching your budget", color: "ocean" as const },
   { icon: Calendar, title: "Itinerary", description: "AI-generated day-wise travel plans", color: "sunset" as const },
+];
+
+const inspirations = [
+  {
+    title: "Romantic Scapes",
+    subtitle: "Udaipur & Beyond",
+    image: "https://images.unsplash.com/photo-1596178065887-1198b6148b2b?q=80&w=2070&auto=format&fit=crop",
+    className: "md:col-span-2 md:row-span-1"
+  },
+  {
+    title: "Adrenaline",
+    subtitle: "High Altitude Thrills",
+    image: "https://images.unsplash.com/photo-1527664557558-a2b352fcf203?q=80&w=2070&auto=format&fit=crop",
+    className: "md:col-span-1 md:row-span-2"
+  },
+  {
+    title: "Tranquil Retreats",
+    subtitle: "Kerala Backwaters",
+    image: "https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?q=80&w=2070&auto=format&fit=crop",
+    className: "md:col-span-1 md:row-span-1"
+  },
+  {
+    title: "Heritage",
+    subtitle: "Royal Rajasthan",
+    image: "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=2070&auto=format&fit=crop",
+    className: "md:col-span-1 md:row-span-1"
+  }
 ];
 
 const famousHotels = [
@@ -231,8 +258,8 @@ const Index = () => {
   const navigate = useNavigate();
 
   const filteredDestinations = activeCategory === "All"
-    ? indianDestinations
-    : indianDestinations.filter((d) => d.category === activeCategory);
+    ? getAllDestinations()
+    : getAllDestinations().filter((d) => d.category === activeCategory);
 
   return (
     <div className="min-h-screen pb-20">
@@ -332,6 +359,44 @@ const Index = () => {
       </section>
 
 
+
+      {/* Travel Inspirations Bento Grid */}
+      <section className="mt-12 px-5 md:container">
+        <div className="mb-6 flex justify-between items-end">
+          <div>
+            <h2 className="font-display text-xl font-bold text-foreground flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-yellow-400" />
+              Travel Inspirations
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Discover your next vibe through these curated escapes</p>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:auto-rows-[160px]">
+          {inspirations.map((item, i) => (
+            <motion.div
+              key={item.title}
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              transition={{ delay: i * 0.1, duration: 0.5 }}
+              viewport={{ once: true }}
+              onClick={() => navigate("/explore")}
+              className={`relative rounded-3xl overflow-hidden group cursor-pointer shadow-sm border border-border/50 h-[160px] md:h-auto ${item.className}`}
+            >
+              <img 
+                src={item.image} 
+                alt={item.title} 
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-opacity duration-500 group-hover:opacity-90" />
+              <div className="absolute bottom-4 left-4 right-4 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                <p className="text-[10px] text-white/80 font-bold uppercase tracking-widest mb-1">{item.subtitle}</p>
+                <h3 className="text-white font-display text-xl font-bold leading-tight drop-shadow-md">{item.title}</h3>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </section>
 
       {/* Quick Access */}
       <section className="mt-8 px-5 md:container">

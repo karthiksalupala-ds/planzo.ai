@@ -5,7 +5,7 @@ import {
   ArrowLeft, Star, MapPin, Calendar, IndianRupee, Clock, Utensils,
   Mountain, Share2, Heart, Navigation, Plus, Send, User
 } from "lucide-react";
-import { indianDestinations } from "@/data/destinations";
+import { getAllDestinations } from "@/data/destinations";
 import { useToast } from "@/hooks/use-toast";
 
 interface Review {
@@ -20,7 +20,7 @@ const DestinationDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const destination = indianDestinations.find((d) => d.id === id);
+  const destination = getAllDestinations().find((d) => d.id === id);
 
   const [reviews, setReviews] = useState<Review[]>([]);
   const [showReviewForm, setShowReviewForm] = useState(false);

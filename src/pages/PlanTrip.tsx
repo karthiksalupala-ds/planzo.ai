@@ -20,7 +20,8 @@ import { getPexelsImage } from "@/lib/pexels";
 import InteractiveMap from "@/components/InteractiveMap";
 import ItineraryDisplay from "@/components/ItineraryDisplay";
 import { generateAlternativeActivity } from "@/lib/stream-ai";
-import { indianDestinations } from "@/data/destinations";
+import { getAllDestinations } from "@/data/destinations";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import TripCountdown from "@/components/TripCountdown";
 import { downloadTripICS, openGoogleCalendar } from "@/lib/calendar";
 import TravelMode from "@/components/TravelMode";
@@ -81,8 +82,11 @@ const PlanTrip = () => {
     handleDestinationChange(index, value);
     setAutocompleteIndex(index);
     if (value.trim().length > 1) {
-      const matches = indianDestinations
-        .filter(d => d.name.toLowerCase().includes(value.toLowerCase()) || d.state.toLowerCase().includes(value.toLowerCase()))
+      const matches = getAllDestinations()
+        .filter(d =>
+          d.name.toLowerCase().includes(value.toLowerCase()) ||
+          d.state.toLowerCase().includes(value.toLowerCase())
+        )
         .slice(0, 5)
         .map(d => d.name);
       setSuggestions(matches);

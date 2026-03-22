@@ -1,8 +1,9 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, MapPin, Star, IndianRupee, X, SortAsc, TrendingUp, ArrowUpDown, Heart } from "lucide-react";
-import { indianDestinations } from "@/data/destinations";
+import { Search, MapPin, Star, IndianRupee, X, SortAsc, TrendingUp, ArrowUpDown, Heart, Sparkles, Loader2, Brain } from "lucide-react";
+import { useEffect } from "react";
+import { getAllDestinations } from "@/data/destinations";
 import { useToast } from "@/hooks/use-toast";
 
 const filterTags = ["All", "Culture", "Beach", "Nature", "Adventure", "Romantic"];
@@ -21,7 +22,9 @@ const Explore = () => {
   const [wishlist, setWishlist] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem("planzo_wishlist") || "[]"); } catch { return []; }
   });
-  const navigate = useNavigate();
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+   const navigate = useNavigate();
   const searchRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -34,7 +37,7 @@ const Explore = () => {
     toast({ title: isWishlisted ? `Removed from Wishlist` : `♡ Added to Wishlist`, description: destName });
   };
 
-  const filtered = indianDestinations
+  const filtered = getAllDestinations()
     .filter((d) => {
       const matchesSearch =
         d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -48,6 +51,112 @@ const Explore = () => {
       if (sortBy === "price_desc") return parseInt(b.price.replace(/\D/g, "")) - parseInt(a.price.replace(/\D/g, ""));
       return 0;
     });
+
+  const fetchPexelsImage = async (query: string): Promise<string> => {
+    const pexelsKey = import.meta.env.VITE_PEXELS_API_KEY;
+    if (!pexelsKey) return "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=2074&auto=format&fit=crop";
+
+    try {
+      const resp = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1`, {
+        headers: { Authorization: pexelsKey }
+      });
+      if (!resp.ok) throw new Error("Pexels fetch failed");
+      const data = await resp.json();
+      return data.photos?.[0]?.src?.large || "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=2074&auto=format&fit=crop";
+    } catch (err) {
+      console.error("Pexels Error:", err);
+      return "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=2074&auto=format&fit=crop";
+    }
+  };
+
+  const handleGenerateCard = async () => {
+    if (!searchQuery.trim() || isGenerating) return;
+    
+    // Use the built-in OpenRouter key so travelers don't have to provide their own
+    const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+    if (!apiKey) {
+      toast({ title: "AI Research Unavailable", description: "Admin API Key missing.", variant: "destructive" });
+      return;
+    }
+
+    setIsGenerating(true);
+    toast({ title: "✨ AI is Researching", description: `Uncovering secrets of "${searchQuery}"...`, duration: 3000 });
+
+    try {
+      // 1. Fetch real imagery from Pexels first or concurrent
+      const imageUrl = await fetchPexelsImage(searchQuery);
+
+      // 2. Fetch metadata from AI
+      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": window.location.origin,
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.0-flash-001",
+          messages: [
+            {
+              role: "system",
+              content: `You are a travel database expert. Return ONLY a valid JSON object matching this schema:
+              {
+                "id": "string-slug",
+                "name": "string",
+                "state": "string",
+                "rating": number (4.5-4.9),
+                "tag": "string",
+                "price": "string (e.g. ₹10,000)",
+                "days": "string (e.g. 3 days)",
+                "category": "Culture|Beach|Nature|Adventure|Romantic",
+                "description": "2 sentences",
+                "bestTime": "string",
+                "highlights": ["string"],
+                "lat": number,
+                "lng": number,
+                "foodSpots": ["string"],
+                "activities": ["string"]
+              }`
+            },
+            { role: "user", content: `Generate a destination card for ${searchQuery}. Focus on accurate geographical and cultural details.` }
+          ],
+          response_format: { type: "json_object" }
+        })
+      });
+
+      if (!resp.ok) throw new Error("AI research failed");
+
+      const data = await resp.json();
+      const newDest = JSON.parse(data.choices[0].message.content);
+      
+      // Combine AI metadata with real Pexels image
+      newDest.image = imageUrl;
+      if (!newDest.id.includes("-ai")) newDest.id = `${newDest.id}-ai`;
+
+      const existingAI = JSON.parse(localStorage.getItem("planzo_ai_destinations") || "[]");
+      localStorage.setItem("planzo_ai_destinations", JSON.stringify([newDest, ...existingAI]));
+      
+      setSearchQuery("");
+      setRefreshKey(prev => prev + 1);
+      toast({ title: "Research Complete! 🎊", description: `${newDest.name} added to your map.` });
+      setTimeout(() => navigate(`/destination/${newDest.id}`), 500);
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Research Failed", description: "AI couldn't reach the destination.", variant: "destructive" });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Auto-trigger AI research when no static results found
+  useEffect(() => {
+    if (searchQuery.trim().length > 3 && filtered.length === 0 && !isGenerating) {
+      const timer = setTimeout(() => {
+        handleGenerateCard();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchQuery, filtered.length, isGenerating]);
 
   return (
     <div className="px-5 md:container py-6">
@@ -134,6 +243,61 @@ const Explore = () => {
           {sortBy !== "default" && <span className="ml-2 text-primary font-medium flex-inline items-center gap-1"><TrendingUp className="h-3 w-3 inline-block mr-0.5" />{sortOptions.find(s => s.value === sortBy)?.label}</span>}
         </p>
       )}
+
+      {/* AI Intelligence Display */}
+      <AnimatePresence mode="wait">
+        {isGenerating ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mt-6 p-6 rounded-[32px] bg-gradient-to-br from-primary/10 via-background to-background border border-primary/20 shadow-xl overflow-hidden relative group"
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 animate-pulse" />
+            <div className="flex flex-col md:flex-row items-center gap-6 relative z-10">
+              <div className="h-16 w-16 rounded-2xl bg-primary/20 flex items-center justify-center border border-primary/30 shadow-inner">
+                 <Brain className="h-8 w-8 text-primary animate-pulse" />
+              </div>
+              <div className="flex-1 text-center md:text-left">
+                <h3 className="text-xl font-display font-black text-primary tracking-tight">AI is researching "{searchQuery}"</h3>
+                <p className="text-sm text-muted-foreground mt-1 max-w-md">Our AI scouts are gathering local highlights, food spots, and travel tips for you...</p>
+                <div className="mt-4 flex items-center gap-2">
+                   <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                      <motion.div 
+                        initial={{ x: "-100%" }}
+                        animate={{ x: "0%" }}
+                        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                        className="h-full w-full bg-gradient-to-r from-primary/40 via-primary to-primary/40"
+                      />
+                   </div>
+                   <span className="text-[10px] font-black text-primary/60 uppercase whitespace-nowrap">Live Probe</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : searchQuery.trim().length > 1 && filtered.length === 0 && (
+          <motion.div
+             initial={{ opacity: 0, height: 0, y: -10 }}
+             animate={{ opacity: 1, height: "auto", y: 0 }}
+             exit={{ opacity: 0, height: 0 }}
+             className="mt-4 mb-2 overflow-hidden"
+          >
+            <div 
+               className="p-4 rounded-2xl bg-gradient-to-r from-primary/5 to-transparent border border-primary/20 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm"
+            >
+              <div className="flex items-center gap-3 w-full">
+                 <div className="h-10 w-10 flex-shrink-0 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                 </div>
+                 <div className="flex-1 text-left">
+                    <h3 className="font-bold text-primary font-display text-sm md:text-base leading-tight">Instant AI Research active</h3>
+                    <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">Keep typing... if we can't find it, our AI will automatically research it for you!</p>
+                 </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Results */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">

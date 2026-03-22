@@ -5,8 +5,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getAllDestinations } from "@/data/destinations";
 import type { Tables } from "@/integrations/supabase/types";
-import { indianDestinations } from "@/data/destinations";
 import TripCountdown from "@/components/TripCountdown";
 import { downloadTripICS, openGoogleCalendar } from "@/lib/calendar";
 
@@ -354,9 +355,9 @@ const Profile = () => {
 
                   return filtered.map(trip => {
                     const titleWords = trip.title.toLowerCase().split(/[\s,]+/);
-                    const destMatch = indianDestinations.find(d =>
+                    const destMatch = getAllDestinations().find(d =>
                       titleWords.some(word => word.length > 3 && d.name.toLowerCase().includes(word))
-                    ) || indianDestinations.find(d => trip.title.toLowerCase().includes(d.name.split(",")[0].toLowerCase()));
+                    ) || getAllDestinations().find(d => trip.title.toLowerCase().includes(d.name.split(",")[0].toLowerCase()));
                     const image = destMatch?.image || "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=2074&auto=format&fit=crop";
 
                     return (
@@ -413,8 +414,8 @@ const Profile = () => {
                     <button onClick={() => navigate("/explore")} className="px-6 py-2.5 rounded-2xl border border-primary text-primary text-sm font-bold hover:bg-primary hover:text-white transition-all">Explore Destinations</button>
                   </div>
                 ) : (
-                  wishlist.map(destId => {
-                    const dest = indianDestinations.find(d => d.id === destId);
+                  wishlist.map((destId) => {
+                    const dest = getAllDestinations().find(d => d.id === destId);
                     if (!dest) return null;
                     return (
                       <div key={dest.id} onClick={() => navigate(`/destination/${dest.id}`)} className="flex gap-4 bg-card p-4 rounded-[28px] border border-border shadow-sm hover:shadow-md cursor-pointer transition-all group">

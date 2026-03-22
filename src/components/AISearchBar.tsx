@@ -2,7 +2,7 @@ import { Search, Sparkles, Mic, MapPin } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { indianDestinations } from "@/data/destinations";
+import { getAllDestinations } from "@/data/destinations";
 
 const SCROLLING_PLACEHOLDERS = [
   "Where to next?",
@@ -42,13 +42,13 @@ const AISearchBar = () => {
 
   // Dynamic suggestions from real destinations data
   const suggestions = query.trim().length > 1
-    ? indianDestinations
+    ? getAllDestinations()
         .filter(d =>
           d.name.toLowerCase().includes(query.toLowerCase()) ||
           d.state.toLowerCase().includes(query.toLowerCase())
         )
         .slice(0, 5)
-    : indianDestinations.slice(0, 4); // Top 4 as default when focused
+    : getAllDestinations().slice(0, 4); // Top 4 as default when focused
 
   return (
     <div className="relative w-full max-w-3xl mx-auto z-50">
@@ -106,20 +106,49 @@ const AISearchBar = () => {
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold px-2 pb-1">
             {query.trim().length > 1 ? "Matching destinations" : "Popular destinations"}
           </p>
-          {suggestions.map((d) => (
-            <button
-              key={d.id}
-              onMouseDown={() => {
-                setQuery(d.name);
-                navigate(`/plan?dest=${encodeURIComponent(d.name)}`);
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-xs text-foreground hover:bg-muted rounded-lg transition-colors text-left"
-            >
-              <MapPin className="h-3 w-3 text-primary flex-shrink-0" />
-              <span className="font-medium">{d.name}</span>
-              <span className="text-muted-foreground ml-auto">{d.state}</span>
-            </button>
-          ))}
+          {suggestions.length > 0 ? (
+            suggestions.map((d) => (
+              <button
+                key={d.id}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setQuery(d.name);
+                  navigate(`/plan?dest=${encodeURIComponent(d.name)}`);
+                }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-xs text-foreground hover:bg-muted rounded-lg transition-colors text-left"
+              >
+                <MapPin className="h-3 w-3 text-primary flex-shrink-0" />
+                <span className="font-medium">{d.name}</span>
+                <span className="text-muted-foreground ml-auto">{d.state}</span>
+              </button>
+            ))
+          ) : (
+            <p className="px-3 py-2 text-xs text-muted-foreground italic">No standard destinations found.</p>
+          )}
+
+          {query.trim().length > 1 && (
+            <>
+              <div className="h-px bg-border my-2 mx-1" />
+              <button
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  navigate(`/plan?dest=${encodeURIComponent(query)}`);
+                }}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5 hover:bg-primary/10 border border-primary/20 transition-all text-left group"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-md bg-primary/20 flex items-center justify-center">
+                     <Sparkles className="h-3 w-3 text-primary group-hover:scale-110 transition-transform" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-primary leading-tight">Ask AI to plan trip</p>
+                    <p className="text-[10px] text-muted-foreground">Generate itinerary for "{query}"</p>
+                  </div>
+                </div>
+                <span className="text-xs text-primary font-semibold opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">→</span>
+              </button>
+            </>
+          )}
         </motion.div>
       )}
     </div>

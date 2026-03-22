@@ -298,3 +298,16 @@ export const indianDestinations: Destination[] = [
     activities: ["Beach Trekking", "Yoga", "Surfing", "Temple Visit"],
   }
 ];
+
+export const getAllDestinations = (): Destination[] => {
+  try {
+    const raw = localStorage.getItem("planzo_ai_destinations");
+    const aiDestinations = raw ? JSON.parse(raw) : [];
+    const validAiDest = Array.isArray(aiDestinations) 
+      ? aiDestinations.filter(d => d && typeof d.name === "string" && typeof d.state === "string" && d.id)
+      : [];
+    return [...indianDestinations, ...validAiDest];
+  } catch {
+    return indianDestinations;
+  }
+};
