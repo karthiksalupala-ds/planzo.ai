@@ -13,6 +13,7 @@ interface ItineraryDisplayProps {
   isSwapping: string | null;
   onRegenerateDay: (dayIndex: number) => void;
   onSwapActivity: (dayNum: number, activityIndex: number, oldActivityName: string) => void;
+  isReadOnly?: boolean;
 }
 
 export const generateApproximateTime = (index: number) => {
@@ -39,7 +40,7 @@ export const getDistanceIndicator = (index: number) => {
 
 const ItineraryDisplay = ({
   plan, activeDayIndex, regeneratingDay, isSwapping,
-  onRegenerateDay, onSwapActivity
+  onRegenerateDay, onSwapActivity, isReadOnly = false
 }: ItineraryDisplayProps) => {
 
   if (!plan.itinerary) return null;
@@ -96,7 +97,7 @@ const ItineraryDisplay = ({
       {plan.itinerary.map((day: TripDay, i: number) => (
         <motion.div 
           key={day.day} 
-          className="day-container rounded-3xl bg-card shadow-lg border border-border/30 overflow-hidden"
+        className="day-container rounded-[28px] bg-card shadow-xl shadow-primary/5 border border-border/40 overflow-hidden transition-all duration-300 hover:shadow-2xl hover:shadow-primary/10"
           data-day-index={i}
           initial={{ opacity: 0, y: 12 }} 
           animate={{ opacity: 1, y: 0 }} 
@@ -104,11 +105,11 @@ const ItineraryDisplay = ({
         >
           {/* Day Hero Image from AI */}
           {day.heroImage && (
-            <div className="relative mb-4 h-56 overflow-hidden group">
+            <div className="relative mb-4 h-64 overflow-hidden group">
               <img
                 src={day.heroImage}
                 alt={day.title}
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-110 blur-0"
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = 'none';
                 }}
@@ -117,7 +118,7 @@ const ItineraryDisplay = ({
               <div className="absolute bottom-4 left-5 right-5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
+                    <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center flex-shrink-0 ring-1 ring-white/30">
                       <span className="text-lg font-bold text-white">{day.day}</span>
                     </div>
                     <div>
@@ -125,14 +126,16 @@ const ItineraryDisplay = ({
                       <h4 className="font-display font-bold text-white text-2xl leading-tight mt-0.5">{day.title}</h4>
                     </div>
                   </div>
-                  <button
-                    onClick={() => onRegenerateDay(i)}
-                    disabled={regeneratingDay !== null}
-                    className="p-2 rounded-full bg-white/10 hover:bg-white/30 backdrop-blur-md text-white transition-all disabled:opacity-50"
-                    title="Regenerate this day"
-                  >
-                    {regeneratingDay === i ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  </button>
+                  {!isReadOnly && (
+                    <button
+                      onClick={() => onRegenerateDay(i)}
+                      disabled={regeneratingDay !== null}
+                      className="p-2 rounded-full bg-white/10 hover:bg-white/30 backdrop-blur-md text-white transition-all disabled:opacity-50"
+                      title="Regenerate this day"
+                    >
+                      {regeneratingDay === i ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -149,13 +152,15 @@ const ItineraryDisplay = ({
                     <h4 className="font-display font-bold text-foreground text-xl leading-tight mt-0.5">{day.title}</h4>
                   </div>
                 </div>
-                <button
-                  onClick={() => onRegenerateDay(i)}
-                  disabled={regeneratingDay !== null}
-                  className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-50 border border-border/50"
-                >
-                  {regeneratingDay === i ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <RefreshCw className="h-4 w-4 text-muted-foreground" />}
-                </button>
+                {!isReadOnly && (
+                  <button
+                    onClick={() => onRegenerateDay(i)}
+                    disabled={regeneratingDay !== null}
+                    className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-50 border border-border/50"
+                  >
+                    {regeneratingDay === i ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <RefreshCw className="h-4 w-4 text-muted-foreground" />}
+                  </button>
+                )}
               </div>
             )}
 
@@ -183,8 +188,8 @@ const ItineraryDisplay = ({
                       )}
 
                       {!isString && activity.image ? (
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 py-3 px-3 rounded-2xl bg-card border border-border/50 shadow-sm hover:shadow-md transition-all group">
-                          <div className="w-full sm:w-32 h-40 sm:h-32 rounded-xl overflow-hidden flex-shrink-0 relative">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-5 py-4 px-4 rounded-[22px] bg-card border border-border/40 shadow-sm hover:shadow-lg hover:border-primary/20 transition-all duration-300 group">
+                          <div className="w-full sm:w-36 h-48 sm:h-32 rounded-xl overflow-hidden flex-shrink-0 relative shadow-inner bg-muted">
                             <img
                               src={activity.image}
                               alt={activity.name || activity.place}
@@ -230,14 +235,16 @@ const ItineraryDisplay = ({
                                   <Map className="h-4 w-4" /> Open in Google Maps
                                 </a>
                               )}
-                              <button 
-                                onClick={() => onSwapActivity(day.day, j, activity.name || '')}
-                                disabled={isSwapping === `${day.day}-${j}`}
-                                className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border/50 text-xs font-bold text-muted-foreground hover:bg-muted transition-colors ml-auto"
-                              >
-                                {isSwapping === `${day.day}-${j}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                                Swap Activity
-                              </button>
+                              {!isReadOnly && (
+                                <button 
+                                  onClick={() => onSwapActivity(day.day, j, activity.name || '')}
+                                  disabled={isSwapping === `${day.day}-${j}`}
+                                  className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border/50 text-xs font-bold text-muted-foreground hover:bg-muted transition-colors ml-auto"
+                                >
+                                  {isSwapping === `${day.day}-${j}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                                  Swap Activity
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>

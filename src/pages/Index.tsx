@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { MapPin, Hotel, Utensils, Compass, IndianRupee, Calendar, Mountain, Sparkles, TrendingUp, Heart, Palmtree, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import AISearchBar from "@/components/AISearchBar";
 import DestinationCard from "@/components/DestinationCard";
 import SmartCard from "@/components/SmartCard";
 import CategoryChip from "@/components/CategoryChip";
 import { getAllDestinations } from "@/data/destinations";
+
 
 const categories = [
   { icon: Compass, label: "All" },
@@ -34,19 +36,19 @@ const inspirations = [
   {
     title: "Adrenaline",
     subtitle: "High Altitude Thrills",
-    image: "https://images.unsplash.com/photo-1527664557558-a2b352fcf203?q=80&w=2070&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1533130061792-64b34b645c3b?q=80&w=2070&auto=format&fit=crop",
     className: "md:col-span-1 md:row-span-2"
   },
   {
     title: "Tranquil Retreats",
     subtitle: "Kerala Backwaters",
-    image: "https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?q=80&w=2070&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?q=80&w=2070&auto=format&fit=crop",
     className: "md:col-span-1 md:row-span-1"
   },
   {
     title: "Heritage",
     subtitle: "Royal Rajasthan",
-    image: "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=2070&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1599661046289-e31897846e41?q=80&w=2070&auto=format&fit=crop",
     className: "md:col-span-1 md:row-span-1"
   }
 ];
@@ -117,7 +119,6 @@ const famousHotels = [
     price: "₹15,000"
   }
 ];
-
 const topFoods = [
   {
     id: 1,
@@ -141,19 +142,19 @@ const topFoods = [
     id: 4,
     name: "Masala Dosa",
     location: "South India",
-    image: "https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?q=80&w=2070&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1541014741259-de52941cfb4c?q=80&w=2070&auto=format&fit=crop",
   },
   {
     id: 5,
     name: "Amritsari Kulcha",
     location: "Punjab",
-    image: "https://images.unsplash.com/photo-1626779848520-216962f3aabe?q=80&w=2070&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1626074353765-517a681e40be?q=80&w=1974&auto=format&fit=crop",
   },
   {
     id: 6,
     name: "Rogan Josh",
     location: "Kashmir",
-    image: "https://images.unsplash.com/photo-1585937421612-70a008356236?q=80&w=1986&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1627308595229-7830a5c91f9f?q=80&w=2070&auto=format&fit=crop",
   },
   {
     id: 7,
@@ -183,7 +184,7 @@ const popularActivities = [
   {
     id: 3,
     name: "Paragliding",
-    image: "https://images.unsplash.com/photo-1527664557558-a2b352fcf203?q=80&w=2070&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1524592094714-0f0654e20314?q=80&w=2070&auto=format&fit=crop",
   },
   {
     id: 4,
@@ -372,26 +373,41 @@ const Index = () => {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:auto-rows-[160px]">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:auto-rows-[180px]">
           {inspirations.map((item, i) => (
             <motion.div
               key={item.title}
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.1, duration: 0.5 }}
-              viewport={{ once: true }}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              viewport={{ once: true, margin: "-50px" }}
               onClick={() => navigate("/explore")}
-              className={`relative rounded-3xl overflow-hidden group cursor-pointer shadow-sm border border-border/50 h-[160px] md:h-auto ${item.className}`}
+              className={cn(
+                "relative rounded-[32px] overflow-hidden group cursor-pointer border border-border/50 shadow-md h-[180px] md:h-auto",
+                "before:absolute before:inset-0 before:bg-gradient-to-t before:from-black/90 before:via-black/20 before:to-transparent before:z-10",
+                item.className
+              )}
             >
               <img 
                 src={item.image} 
                 alt={item.title} 
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-opacity duration-500 group-hover:opacity-90" />
-              <div className="absolute bottom-4 left-4 right-4 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
-                <p className="text-[10px] text-white/80 font-bold uppercase tracking-widest mb-1">{item.subtitle}</p>
-                <h3 className="text-white font-display text-xl font-bold leading-tight drop-shadow-md">{item.title}</h3>
+              <div className="absolute bottom-6 left-6 right-6 z-20 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                <div className="flex items-center gap-2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                   <div className="h-px w-6 bg-primary" />
+                   <span className="text-[10px] text-primary font-black uppercase tracking-[0.2em]">{item.subtitle}</span>
+                </div>
+                <h3 className="text-white font-display text-2xl font-black leading-tight drop-shadow-md tracking-tight">{item.title}</h3>
+                <div className="mt-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 delay-100">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-white/60">View Destinations</span>
+                  <Compass className="h-3 w-3 text-primary animate-spin-slow" />
+                </div>
+              </div>
+              <div className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <div className="bg-white/10 backdrop-blur-md p-2 rounded-xl border border-white/20">
+                   <Heart className="h-4 w-4 text-white" />
+                </div>
               </div>
             </motion.div>
           ))}

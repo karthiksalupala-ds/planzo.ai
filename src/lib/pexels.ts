@@ -9,19 +9,29 @@ export async function getPexelsImage(query: string): Promise<string> {
   const apiKey = import.meta.env.VITE_PEXELS_API_KEY;
   if (!apiKey) return FALLBACK_IMAGE;
 
-  try {
-    const res = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1`,
-      { headers: { Authorization: apiKey } }
-    );
+  const tryQuery = async (searchQuery: string) => {
+    try {
+      const res = await fetch(
+        `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=1`,
+        { headers: { Authorization: apiKey } }
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.photos?.[0]?.src?.large2x || data.photos?.[0]?.src?.large || null;
+    } catch {
+      return null;
+    }
+  };
 
-    if (!res.ok) return FALLBACK_IMAGE;
+  const firstAttempt = await tryQuery(query);
+  if (firstAttempt) return firstAttempt;
 
-    const data = await res.json();
-    return data.photos?.[0]?.src?.large || FALLBACK_IMAGE;
-  } catch {
-    return FALLBACK_IMAGE;
-  }
+  // Fallback 1: More generic search
+  const genericAttempt = await tryQuery(query.split(" ")[0] + " travel landscape");
+  if (genericAttempt) return genericAttempt;
+  
+  // Ultimate Fallback
+  return FALLBACK_IMAGE;
 }
 
 /**

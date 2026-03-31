@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Mail, Lock, User, Plane, Loader2, Eye, EyeOff, CheckCircle } from "lucide-react";
+import { Mail, Lock, User, Plane, Loader2, Eye, EyeOff, CheckCircle, Sparkles } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -204,6 +204,28 @@ const Auth = () => {
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {isLogin ? "Sign In" : "Create Account"}
+              </button>
+
+              <div className="flex items-center gap-3 pt-1">
+                <div className="flex-1 h-px bg-border/50" />
+                <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Or Testing</span>
+                <div className="flex-1 h-px bg-border/50" />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail("test@planzo.ai");
+                  setPassword("password");
+                  setTimeout(() => {
+                    const form = document.querySelector('form');
+                    if (form) form.requestSubmit();
+                  }, 100);
+                }}
+                className="w-full py-3 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-500 font-bold text-xs flex items-center justify-center gap-2 hover:bg-amber-500/20 transition-all border border-amber-500/20 shadow-sm"
+              >
+                <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+                Quick Test Login (No Network)
               </button>
             </form>
           </div>

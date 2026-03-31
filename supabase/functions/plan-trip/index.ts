@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -13,6 +14,7 @@ interface TripRequest {
   travelers?: number;
   days?: number;
   vibe?: string;
+  userTravelStyle?: string[];
 }
 
 interface TripResponse {
@@ -35,8 +37,38 @@ interface TripResponse {
     activities: number;
     miscellaneous: number;
   };
-  travelOptions: { mode: string; from: string; to: string; estimatedCost: number; duration: string }[];
-  localTransport: { mode: string; estimatedDailyCost: number; notes: string }[];
+  travelOptions: { 
+    mode: string; 
+    from: string; 
+    to: string; 
+    estimatedCost: number; 
+    duration: string;
+    operator?: string;
+    operatorLogo?: string;
+    departureTime?: string;
+    arrivalTime?: string;
+    price?: number;
+    bookingUrl?: string;
+    type?: string;
+    amenities?: string[];
+    policy?: string;
+    availability?: number;
+    rating?: number;
+    reviews?: number;
+    departureTerminal?: string;
+    arrivalTerminal?: string;
+    isRecommended?: boolean;
+  }[];
+  localTransport: { 
+    mode: string; 
+    estimatedDailyCost: number; 
+    notes: string;
+    provider?: string;
+    providerLogo?: string;
+    bookingAction?: string;
+    availability?: string;
+    rating?: number;
+  }[];
   destinationImage: string;
   map: { lat: number | null; lng: number | null; embedUrl: string };
   itinerary: {
@@ -108,6 +140,8 @@ Vibe Context:
 - Luxury: Focus on high-end hotels, fine dining, and exclusive experiences.
 - Adventure: Focus on trekking, sports, wild nature, and high-energy activities.
 
+${req.userTravelStyle && req.userTravelStyle.length > 0 ? `Important: The user has specified their personal travel preferences as: "${req.userTravelStyle.join(', ')}". Strongly bias recommendations, activities, and dining toward these preferences where it fits the destination.` : ''}
+
 Return ONLY valid JSON matching this exact schema (no markdown, no explanation):
 {
   "destination": "string",
@@ -115,8 +149,38 @@ Return ONLY valid JSON matching this exact schema (no markdown, no explanation):
   "vibe": "${req.vibe || 'Standard'}",
   "mood": "string (e.g. Adventurous, Relaxing, Cultural)",
   "budgetBreakdown": { "accommodation": number, "food": number, "transport": number, "activities": number, "miscellaneous": number },
-  "travelOptions": [{ "mode": "string", "from": "string", "to": "string", "estimatedCost": number, "duration": "string" }],
-  "localTransport": [{ "mode": "string", "estimatedDailyCost": number, "notes": "string" }],
+  "travelOptions": [{ 
+    "mode": "string (Flight, Train, or Bus)", 
+    "from": "string", 
+    "to": "string", 
+    "operator": "string (e.g. IndiGo, Vistara, AIX Connect, Rajdhani Exp, Zingbus)",
+    "operatorLogo": "string (a placeholder URL or a clear description for logo)",
+    "departureTime": "string (e.g. 06:30 AM)",
+    "arrivalTime": "string (e.g. 09:15 AM)",
+    "price": number,
+    "bookingUrl": "string (realistic link)",
+    "type": "string (e.g. Economy, AC 3-Tier, Luxury Sleeper)",
+    "estimatedCost": number, 
+    "duration": "string",
+    "amenities": ["WiFi", "Meals", "Charging Port", "Extra Legroom"],
+    "policy": "string (Refundable, Non-Refundable, Partially Refundable)",
+    "availability": number (1-50 seats remaining),
+    "rating": number (1-5),
+    "reviews": number,
+    "departureTerminal": "string (e.g. T3, Platform 1)",
+    "arrivalTerminal": "string (e.g. T1, Platform 5)",
+    "isRecommended": boolean
+  }],
+  "localTransport": [{ 
+    "mode": "string", 
+    "estimatedDailyCost": number, 
+    "notes": "string",
+    "provider": "string (Uber, Ola, BluSmart, Local Rental)",
+    "providerLogo": "string",
+    "bookingAction": "string (e.g. Open Uber App)",
+    "availability": "Available now",
+    "rating": number
+  }],
   "itinerary": [{ 
     "day": number, 
     "title": "string", 
@@ -450,6 +514,7 @@ function generateMapData(trip: TripResponse): TripResponse {
 }
 
 // ─── Main Handler ────────────────────────────────────────────────────
+// @ts-ignore
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -474,10 +539,10 @@ serve(async (req) => {
       newDay = tripWithImages.itinerary[0];
 
       // Also need to ensure lat/lng are present from the main plan
-      newDay.activities = newDay.activities.map((act) => ({
+      newDay.activities = newDay.activities.map((act: any) => ({
         ...act,
-        lat: act.lat ?? body.existingPlan.map.lat,
-        lng: act.lng ?? body.existingPlan.map.lng,
+        lat: act.lat ?? body.existingPlan!.map.lat,
+        lng: act.lng ?? body.existingPlan!.map.lng,
       }));
 
       console.log(`[plan-trip] Done regenerating day ${newDay.day}`);

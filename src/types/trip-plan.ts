@@ -41,12 +41,32 @@ export interface TravelOption {
   to?: string;
   estimatedCost?: number;
   duration?: string;
+  operator?: string;
+  operatorLogo?: string;
+  departureTime?: string;
+  arrivalTime?: string;
+  price?: number;
+  bookingUrl?: string;
+  type?: string;
+  amenities?: string[];
+  policy?: string;
+  availability?: number;
+  rating?: number;
+  reviews?: number;
+  departureTerminal?: string;
+  arrivalTerminal?: string;
+  isRecommended?: boolean;
 }
 
 export interface LocalTransportOption {
   mode?: string;
   estimatedDailyCost?: number;
   notes?: string;
+  provider?: string;
+  providerLogo?: string;
+  bookingAction?: string;
+  availability?: string;
+  rating?: number;
 }
 
 export interface TripPlan {
@@ -72,6 +92,7 @@ export interface TripPlan {
     embedUrl?: string;
   };
   weatherNote?: string;
+  vibe?: string;
 }
 
 export interface CategoryCoaching {

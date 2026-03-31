@@ -19,6 +19,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check for mock user first
+    const mockUser = localStorage.getItem("planzo_mock_user");
+    if (mockUser) {
+      const parsed = JSON.parse(mockUser);
+      setUser(parsed);
+      setSession({ user: parsed, access_token: "mock-token", refresh_token: "mock-refresh", expires_in: 3600, token_type: "bearer" } as Session);
+      setLoading(false);
+      return;
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -29,12 +39,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+    }).catch(() => {
+      // If Supabase fails (e.g. DNS error), we still set loading to false
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   const signUp = async (email: string, password: string, displayName?: string) => {
+    // Mock Signup
+    if (email === "test@planzo.ai") return signIn(email, password);
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -47,12 +63,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signIn = async (email: string, password: string) => {
+    // Mock Login Bypass
+    if (email === "test@planzo.ai" && password === "password") {
+      const mockUser = {
+        id: "mock-user-123",
+        email: "test@planzo.ai",
+        user_metadata: { display_name: "Test Traveler" },
+        aud: "authenticated",
+        role: "authenticated",
+        created_at: new Date().toISOString()
+      } as any;
+      
+      localStorage.setItem("planzo_mock_user", JSON.stringify(mockUser));
+      setUser(mockUser);
+      setSession({ user: mockUser, access_token: "mock-token" } as any);
+      return { error: null };
+    }
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error?.message ?? null };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    localStorage.removeItem("planzo_mock_user");
+    setUser(null);
+    setSession(null);
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore if offline
+    }
   };
 
   return (

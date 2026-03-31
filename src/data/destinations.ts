@@ -155,7 +155,7 @@ export const indianDestinations: Destination[] = [
   },
   {
     id: "rishikesh",
-    image: "https://images.unsplash.com/photo-1603566195743-26ac5e2e92ec?q=80&w=2070&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=2070&auto=format&fit=crop",
     name: "Rishikesh",
     state: "Uttarakhand",
     rating: 4.8,
@@ -173,7 +173,7 @@ export const indianDestinations: Destination[] = [
   },
   {
     id: "andaman",
-    image: "https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?q=80&w=2071&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1590523741831-ab7e8b8f9c7f?q=80&w=2071&auto=format&fit=crop",
     name: "Andaman Islands",
     state: "Andaman & Nicobar",
     rating: 4.9,
@@ -191,7 +191,7 @@ export const indianDestinations: Destination[] = [
   },
   {
     id: "hampi",
-    image: "https://images.unsplash.com/photo-1620766165457-a80fe59217ca?q=80&w=1974&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1620173834206-c029bf322dab?q=80&w=2070&auto=format&fit=crop",
     name: "Hampi",
     state: "Karnataka",
     rating: 4.7,
@@ -209,7 +209,7 @@ export const indianDestinations: Destination[] = [
   },
   {
     id: "meghalaya",
-    image: "https://images.unsplash.com/photo-1582234372722-50d7ccc30ebd?q=80&w=2070&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1621255551980-2a868972e6b2?q=80&w=2070&auto=format&fit=crop",
     name: "Shillong & Cherrapunji",
     state: "Meghalaya",
     rating: 4.8,
@@ -227,7 +227,7 @@ export const indianDestinations: Destination[] = [
   },
   {
     id: "pondicherry",
-    image: "https://images.unsplash.com/photo-1587313333333-e0242258aaad?q=80&w=2070&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1590733471018-80922e399589?q=80&w=2070&auto=format&fit=crop",
     name: "Pondicherry",
     state: "Puducherry",
     rating: 4.6,
@@ -245,7 +245,7 @@ export const indianDestinations: Destination[] = [
   },
   {
     id: "darjeeling",
-    image: "https://images.unsplash.com/photo-1555025983-a4cbaecdef5e?q=80&w=2070&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1581452449033-02fd05559da6?q=80&w=2070&auto=format&fit=crop",
     name: "Darjeeling",
     state: "West Bengal",
     rating: 4.7,
@@ -263,7 +263,7 @@ export const indianDestinations: Destination[] = [
   },
   {
     id: "coorg",
-    image: "https://images.unsplash.com/photo-1595815771614-ade9d652a65d?q=80&w=2070&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1601633458602-5ee3415c1363?q=80&w=2070&auto=format&fit=crop",
     name: "Coorg",
     state: "Karnataka",
     rating: 4.7,
@@ -281,7 +281,7 @@ export const indianDestinations: Destination[] = [
   },
   {
     id: "gokarna",
-    image: "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?q=80&w=2070&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1542401886-65d6c60db217?q=80&w=2070&auto=format&fit=crop",
     name: "Gokarna",
     state: "Karnataka",
     rating: 4.6,
