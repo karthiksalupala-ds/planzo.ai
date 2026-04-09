@@ -111,26 +111,6 @@ const PlanTrip = () => {
     }
   };
 
-  const { toast } = useToast();
-  const { user } = useAuth();
-
-  // ── STAGE 3: MICRO-INTERACTION STATES ──
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const { clientX, clientY } = e;
-    const moveX = (clientX - window.innerWidth / 2) / 45;
-    const moveY = (clientY - window.innerHeight / 2) / 45;
-    setMousePos({ x: moveX, y: moveY });
-  };
-
-  const vibeConfig: Record<string, { color: string, glow: string, bg: string }> = {
-    "Standard": { color: "rgb(99, 102, 241)", glow: "rgba(99, 102, 241, 0.4)", bg: "bg-indigo-600" },
-    "Budget": { color: "rgb(16, 185, 129)", glow: "rgba(16, 185, 129, 0.4)", bg: "bg-emerald-600" },
-    "Luxury": { color: "rgb(245, 158, 11)", glow: "rgba(245, 158, 11, 0.4)", bg: "bg-amber-500" },
-    "Adventure": { color: "rgb(244, 63, 94)", glow: "rgba(244, 63, 94, 0.4)", bg: "bg-rose-500" },
-  };
-  const activeConfig = vibeConfig[vibe] || vibeConfig["Standard"];
-
   useEffect(() => {
     if (tripId) {
       setLoading(true);
@@ -165,6 +145,9 @@ const PlanTrip = () => {
       };
     }
   }, [tripId]);
+
+  const { toast } = useToast();
+  const { user } = useAuth();
   const isOwner = !tripId || (user && tripOwnerId === user.id);
   const isGuest = !user;
   const isViewer = user && tripOwnerId && tripOwnerId !== user.id;
@@ -518,371 +501,220 @@ const PlanTrip = () => {
   const getStatusIcon = () => {
     if (budgetStatus.includes("Ã°Å¸Å¸Â¢") || budgetStatus.includes("Within")) return CheckCircle;
     if (budgetStatus.includes("Ã°Å¸Å¸Â¡") || budgetStatus.includes("Near")) return AlertTriangle;
-    if (budgetStatus.includes("Ã°Å¸â€ Â´") || budgetStatus.includes("Over")) return XCircle;
+    if (budgetStatus.includes("Ã°Å¸â€Â´") || budgetStatus.includes("Over")) return XCircle;
     return CheckCircle;
   };
 
   const StatusIcon = getStatusIcon();
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* ── HERO SECTION ── */}
-      <div className="relative w-full overflow-hidden" style={{ minHeight: "560px" }}>
-        {/* Gradient backdrop */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: "linear-gradient(135deg, #0f0c29 0%, #1a1a4e 30%, #24243e 60%, #0d1b4b 100%)",
-          }}
-        />
-        
-        {/* Decorative mask for bottom transition */}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-95" />
+    <div className="px-5 md:container py-6 max-w-2xl mx-auto">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+        <h1 className="font-display text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600">Let's Plan Your Next Adventure!</h1>
+        <p className="text-sm text-muted-foreground mt-1">Your AI-powered trip planner for personalized itineraries and smart budget management.</p>
+      </motion.div>
 
-        {/* Animated blobs */}
-        <motion.div
-          className="absolute top-[-80px] left-[-60px] rounded-full opacity-30 blur-3xl pointer-events-none"
-          style={{ width: 380, height: 380, background: "radial-gradient(circle, #6366f1 0%, transparent 70%)" }}
-          animate={{ x: [0, 30, 0], y: [0, 20, 0] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute bottom-[-100px] right-[-80px] rounded-full opacity-25 blur-3xl pointer-events-none"
-          style={{ width: 460, height: 460, background: "radial-gradient(circle, #06b6d4 0%, transparent 70%)" }}
-          animate={{ x: [0, -25, 0], y: [0, -30, 0] }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-        />
-
-        {/* Subtle dot grid overlay */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)",
-            backgroundSize: "32px 32px",
-          }}
-        />
-
-        {/* Hero content */}
-        <div className="relative z-10 flex flex-col items-center justify-center text-center px-6 pt-24 pb-48">
-          {/* Badge */}
-          <motion.div
-            initial={{ opacity: 0, y: -16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-          >
-            <span
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.25em]"
-              style={{
-                background: "rgba(99,102,241,0.15)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                color: "#a5b4fc",
-                backdropFilter: "blur(12px)",
-              }}
+      {/* Mood Chips */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mt-4">
+        <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-2">Trip Mood</p>
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+          {moods.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setActiveMood(m.id)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${activeMood === m.id
+                ? "gradient-hero text-primary-foreground shadow-card"
+                : "bg-card text-muted-foreground hover:text-slate-800 dark:text-slate-100 shadow-card"
+                }`}
             >
-              <Sparkles className="h-3.5 w-3.5" />
-              AI-Powered Trip Planner
-            </span>
-          </motion.div>
-
-          {/* Headline */}
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.12 }}
-            className="mt-10 font-display font-black leading-tight tracking-tighter"
-            style={{ fontSize: "clamp(2.8rem, 7vw, 4.8rem)", color: "#ffffff" }}
-          >
-            Your Next Adventure{" "}
-            <span
-              style={{
-                background: "linear-gradient(90deg, #818cf8, #38bdf8, #a78bfa)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
-              Starts Here
-            </span>
-          </motion.h1>
-
-          {/* Tagline */}
-          <motion.p
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="mt-8 max-w-2xl text-base md:text-xl opacity-80 leading-relaxed mx-auto"
-            style={{ color: "rgba(196,213,255,0.85)" }}
-          >
-            Craft a stunning, fully personalized itinerary — complete with budgets, logistics &amp; day-by-day activities in seconds.
-          </motion.p>
-          
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="flex flex-wrap justify-center gap-8 md:gap-16 pt-4">
-            {[
-              { val: "1.2M+", label: "Trips Orchestrated" },
-              { val: "185+", label: "Destinations" },
-              { val: "4.9/5", label: "User Trust Score" }
-            ].map(s => (
-              <div key={s.label} className="text-center group">
-                <p className="text-2xl font-black text-white group-hover:text-indigo-400 transition-colors">{s.val}</p>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{s.label}</p>
-              </div>
-            ))}
-          </motion.div>
+              <m.icon className="h-3.5 w-3.5" />
+              {m.label}
+            </button>
+          ))}
         </div>
-      </div>
+      </motion.div>
 
-      {/* ── SEARCH CARD ── */}
-      <div className="relative z-30 px-4 md:px-6 max-w-4xl mx-auto -mt-36 pb-24">
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35, type: "spring", damping: 20 }}
-          className="rounded-[40px] overflow-hidden shadow-[0_40px_80px_-20px_rgba(0,0,0,0.3)] border-t border-white/40"
-          style={{
-            background: "rgba(255, 255, 255, 0.88)",
-            backdropFilter: "blur(48px) saturate(200%)",
-            border: "1px solid rgba(255, 255, 255, 0.6)",
-            boxShadow: `inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 32px 64px -16px ${activeConfig.glow}`,
-          }}
-        >
-          {/* Card header – Mood chips */}
-          <div className="px-10 pt-10 pb-6 border-b" style={{ borderColor: "rgba(0,0,0,0.04)" }}>
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-5" style={{ color: activeConfig.color }}>
-              Personalize Your Journey
-            </p>
-            <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
-              {moods.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setActiveMood(m.id)}
-                  className={`flex items-center gap-2.5 px-6 py-3 rounded-[20px] text-xs font-black transition-all duration-300 ${
-                    activeMood === m.id
-                      ? `${activeConfig.bg} text-white shadow-[0_12px_24px_-4px_${activeConfig.glow}] scale-[1.05]`
-                      : "bg-slate-100/60 text-slate-500 hover:bg-slate-200/60 hover:text-slate-700"
-                  }`}
-                >
-                  <m.icon className="h-4 w-4" />
-                  {m.label}
-                </button>
-              ))}
-            </div>
+      {/* AI Input */}
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mt-4 p-4 rounded-2xl bg-card shadow-card">
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 rounded-xl gradient-hero flex items-center justify-center flex-shrink-0">
+            <Sparkles className="h-5 w-5 text-primary-foreground" />
           </div>
-
-          {/* Card body */}
-          <div className="p-10 pt-8">
-            {/* AI Input */}
-            <div className="flex items-start gap-6">
-              <motion.div 
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-xl shadow-indigo-600/20 ring-1 ring-white/20"
-              >
-                <Sparkles className="h-7 w-7 text-white" />
-              </motion.div>
-              <div className="flex-1 space-y-4">
-                <AnimatePresence mode="popLayout">
-                  {destinations.map((dest, index) => (
-                    <motion.div 
-                      key={index} 
-                      layout
-                      initial={{ opacity: 0, x: -10 }} 
-                      animate={{ opacity: 1, x: 0 }} 
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="relative group"
+          <div className="flex-1 space-y-2">
+            {destinations.map((dest, index) => (
+              <div key={index} className="relative">
+                {index > 0 && (
+                  <div className="flex items-center gap-2 py-1">
+                    <div className="h-px flex-1 bg-border" />
+                    <span className="text-[10px] font-bold text-primary uppercase tracking-wider">→ Stop {index + 1}</span>
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <input
+                    value={dest}
+                    onChange={(e) => handleDestinationChangeWithSuggest(index, e.target.value)}
+                    onKeyDown={handleDestinationKeyDown}
+                    onBlur={() => setTimeout(() => { setSuggestions([]); setAutocompleteIndex(null); }, 150)}
+                    placeholder={index === 0 ? 'Enter a destination (e.g. Goa)' : 'Add next stop'}
+                    className="flex-1 bg-muted/50 rounded-xl px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 transition-shadow"
+                    autoComplete="off"
+                  />
+                  {destinations.length > 1 && (
+                    <button
+                      onClick={() => removeStop(index)}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      title="Remove stop"
                     >
-                      {index > 0 && (
-                        <div className="flex items-center gap-4 py-2 opacity-30">
-                          <div className="h-px flex-1 bg-slate-200" />
-                          <span className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: activeConfig.color }}>Next Stop</span>
-                          <div className="h-px flex-1 bg-slate-200" />
-                        </div>
-                      )}
-                      <div className="relative flex items-center gap-4">
-                        <div className="flex-1 relative">
-                          <input
-                            value={dest}
-                            onChange={(e) => handleDestinationChangeWithSuggest(index, e.target.value)}
-                            onKeyDown={handleDestinationKeyDown}
-                            onBlur={() => setTimeout(() => { setSuggestions([]); setAutocompleteIndex(null); }, 150)}
-                            placeholder={index === 0 ? 'Where to? (e.g. Kyoto, Japan)' : 'Next destination...'}
-                            className="w-full bg-slate-100/40 rounded-[22px] px-6 py-4 text-base text-slate-900 outline-none placeholder:text-slate-400 focus:ring-4 transition-all font-bold border border-slate-200/60 group-hover:bg-slate-100/80 group-focus-within:border-transparent group-focus-within:bg-white overflow-hidden shadow-inner"
-                            style={{ 
-                              '--tw-ring-color': activeConfig.glow,
-                            } as any}
-                            autoComplete="off"
-                          />
-                          {/* Autocomplete dropdown */}
-                          <AnimatePresence>
-                            {autocompleteIndex === index && suggestions.length > 0 && (
-                              <motion.div 
-                                initial={{ opacity: 0, y: 10 }} 
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 10 }}
-                                className="absolute left-0 right-0 top-full mt-2 z-50 bg-white/95 backdrop-blur-2xl border border-slate-200 rounded-[28px] shadow-2xl overflow-hidden py-3"
-                              >
-                                {suggestions.map((s, idx) => (
-                                  <motion.button
-                                    key={s}
-                                    initial={{ opacity: 0, x: -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: idx * 0.05 }}
-                                    onMouseDown={() => handleSuggestionClick(index, s)}
-                                    className="w-full text-left px-7 py-3.5 text-sm text-slate-700 hover:bg-slate-50 hover:pl-9 transition-all flex items-center gap-4 font-bold active:scale-[0.99]"
-                                  >
-                                    <MapPin className="h-4 w-4" style={{ color: activeConfig.color }} />
-                                    {s}
-                                  </motion.button>
-                                ))}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                        {destinations.length > 1 && (
-                          <button
-                            onClick={() => removeStop(index)}
-                            className="p-3.5 rounded-2xl text-slate-400 hover:text-rose-500 hover:bg-rose-50/50 transition-all active:scale-90"
-                            title="Remove stop"
-                          >
-                            <X className="h-6 w-6" />
-                          </button>
-                        )}
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-                
-                {destinations.length < 5 && (
-                  <button
-                    onClick={addStop}
-                    className="flex items-center gap-2 text-[11px] font-black hover:opacity-80 transition-all mt-2 uppercase tracking-widest pl-2"
-                    style={{ color: activeConfig.color }}
-                  >
-                    <Plus className="h-4 w-4" /> Add Destination
-                  </button>
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                {/* Autocomplete dropdown */}
+                {autocompleteIndex === index && suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-card border border-border rounded-xl shadow-elevated overflow-hidden">
+                    {suggestions.map((s) => (
+                      <button
+                        key={s}
+                        onMouseDown={() => handleSuggestionClick(index, s)}
+                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted/60 transition-colors flex items-center gap-2"
+                      >
+                        <MapPin className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
-            </div>
-
-            {/* Quick Options */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-5 mt-10">
-              {[
-                { label: "Budget (₹)", icon: IndianRupee, value: budget, onChange: setBudget, type: "number", min: 500 },
-                { label: "Days", icon: Calendar, value: days, onChange: (v: string) => setDays(Math.min(30, Math.max(1, parseInt(v) || 1))), type: "number", min: 1, max: 30 },
-                { label: "Travelers", icon: Users, value: travelers, onChange: (v: string) => setTravelers(Math.min(20, Math.max(1, parseInt(v) || 1))), type: "number", min: 1, max: 20 },
-              ].map((opt) => (
-                <div key={opt.label} className="flex flex-col gap-2">
-                  <label className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center gap-2 ml-1">
-                    <opt.icon className="h-3 w-3" style={{ color: activeConfig.color }} /> {opt.label}
-                  </label>
-                  <input
-                    type={opt.type}
-                    value={opt.value}
-                    min={opt.min}
-                    max={opt.max}
-                    onChange={(e) => opt.onChange(e.target.value)}
-                    className="px-5 py-4 rounded-[22px] bg-slate-100/40 text-sm text-slate-900 outline-none focus:ring-4 border border-slate-200/60 transition-all font-bold focus:bg-white"
-                    style={{ '--tw-ring-color': activeConfig.glow } as any}
-                  />
-                </div>
-              ))}
-              
-              <div className="flex flex-col gap-2">
-                <label className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center gap-2 ml-1">
-                  <CalendarPlus className="h-3 w-3" style={{ color: activeConfig.color }} /> Date
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  min={new Date().toISOString().split("T")[0]}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="px-5 py-4 rounded-[22px] bg-slate-100/40 text-sm text-slate-900 outline-none focus:ring-4 border border-slate-200/60 transition-all font-bold focus:bg-white"
-                  style={{ '--tw-ring-color': activeConfig.glow } as any}
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center gap-2 ml-1">
-                  <Zap className="h-3 w-3" style={{ color: activeConfig.color }} /> Vibe
-                </label>
-                <div className="relative">
-                  <select
-                    value={vibe}
-                    onChange={(e) => setVibe(e.target.value)}
-                    className="w-full px-5 py-4 rounded-[22px] bg-slate-100/40 text-sm text-slate-900 outline-none focus:ring-4 border border-slate-200/60 transition-all font-bold appearance-none cursor-pointer focus:bg-white"
-                    style={{ '--tw-ring-color': activeConfig.glow } as any}
-                  >
-                    <option value="Standard">Standard</option>
-                    <option value="Budget">Budget</option>
-                    <option value="Luxury">Luxury</option>
-                    <option value="Adventure">Adventure</option>
-                  </select>
-                  <ChevronRight className="absolute right-5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 rotate-90 pointer-events-none" />
-                </div>
-              </div>
-            </div>
-
-            <motion.button
-              whileHover={{ scale: 1.01, boxShadow: `0 20px 40px -12px ${activeConfig.glow}` }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handlePlan}
-              disabled={isPlanning || !destination.trim()}
-              className={`w-full mt-10 py-5 rounded-[26px] ${activeConfig.bg} text-white font-black text-[11px] uppercase tracking-[0.28em] flex items-center justify-center gap-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden`}
-              style={{ boxShadow: `0 15px 35px -12px ${activeConfig.glow}` }}
-            >
-              {isPlanning && (
-                <motion.div 
-                   initial={{ x: "-100%" }} 
-                   animate={{ x: "100%" }} 
-                   transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                   className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                />
-              )}
-              {isPlanning ? (
-                <><Loader2 className="h-6 w-6 animate-spin" /> Orchestrating Itinerary...</>
-              ) : (
-                <><Sparkles className="h-6 w-6 group-hover:rotate-12 transition-transform" /> Create My Adventure</>
-              )}
-            </motion.button>
-            
-            {!user && (
-              <p className="text-center text-[10px] font-bold text-slate-400 mt-6 uppercase tracking-widest">
-                <User className="h-3 w-3 inline-block mr-1 mb-0.5 opacity-50" />
-                <button onClick={() => navigate('/auth')} className="hover:underline transition-colors" style={{ color: activeConfig.color }}>Sign in</button> to preserve your global explorations
-              </p>
+            ))}
+            {destinations.length < 5 && (
+              <button
+                onClick={addStop}
+                className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors mt-1"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add Stop
+              </button>
             )}
+            <p className="text-xs text-muted-foreground">e.g. Goa → Hampi → Coorg</p>
+          </div>
+        </div>
+
+        {/* Quick Options */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
+              <IndianRupee className="h-3 w-3" /> Budget (₹)
+            </label>
+            <input
+              type="number"
+              value={budget}
+              min={500}
+              onChange={(e) => setBudget(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="15000"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
+              <Calendar className="h-3 w-3" /> Days
+            </label>
+            <input
+              type="number"
+              value={days}
+              min={1}
+              max={30}
+              onChange={(e) => setDays(Math.min(30, Math.max(1, parseInt(e.target.value) || 1)))}
+              className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="3"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
+              <Users className="h-3 w-3" /> Travelers
+            </label>
+            <input
+              type="number"
+              value={travelers}
+              min={1}
+              max={20}
+              onChange={(e) => setTravelers(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
+              className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="2"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
+              <CalendarPlus className="h-3 w-3" /> Start Date
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              min={new Date().toISOString().split("T")[0]}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
+              <Sparkles className="h-3 w-3 text-primary" /> Vibe
+            </label>
+            <select
+              value={vibe}
+              onChange={(e) => setVibe(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20 appearance-none font-medium cursor-pointer"
+            >
+              <option value="Standard">Standard</option>
+              <option value="Budget">Budget</option>
+              <option value="Luxury">Luxury</option>
+              <option value="Adventure">Adventure</option>
+            </select>
+          </div>
+        </div>
+
+        <button onClick={handlePlan} disabled={isPlanning || !destination.trim()} className="w-full mt-4 py-3 rounded-xl gradient-hero text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
+          {isPlanning ? (
+            <><Loader2 className="h-4 w-4 animate-spin" />Generating with AI...</>
+          ) : (
+            <><Send className="h-4 w-4" />Generate Itinerary</>
+          )}
+        </button>
+        {!user && (
+          <p className="text-center text-[11px] text-muted-foreground mt-2">
+            <User className="h-3 w-3 inline-block mr-1" />
+            <button onClick={() => window.location.href = '/auth'} className="text-primary font-semibold hover:underline">Sign in</button> to save & share your trips
+          </p>
+        )}
+      </motion.div>
+
+      {/* Error State */}
+      {error && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 p-4 rounded-2xl bg-destructive/10 border border-destructive/20 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-destructive">Something went wrong</p>
+            <p className="text-xs text-destructive/80 mt-1">{error}</p>
+            <button
+              onClick={handlePlan}
+              className="mt-2 text-xs font-semibold text-destructive underline hover:no-underline"
+            >
+              Try Again
+            </button>
           </div>
         </motion.div>
+      )}
 
-        {/* Error State */}
-        <AnimatePresence>
-          {error && (
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="mt-8 p-6 rounded-[32px] bg-white border border-rose-100 shadow-xl flex items-start gap-4 mx-auto max-w-2xl">
-              <AlertCircle className="h-6 w-6 text-rose-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-black text-rose-600 uppercase tracking-widest leading-none mb-2">Systems Interrupted</p>
-                <p className="text-xs text-rose-500/80 font-medium leading-relaxed">{error}</p>
-                <button onClick={handlePlan} className="mt-4 text-[10px] font-black text-rose-600 uppercase tracking-widest bg-rose-50 px-4 py-2 rounded-xl hover:bg-rose-100 transition-all">Re-attempt Generation</button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Streaming indicator */}
-        <AnimatePresence>
-          {isPlanning && !plan && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-8 p-6 rounded-[32px] bg-white border border-indigo-100 shadow-xl max-w-2xl mx-auto">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
-                  <p className="text-xs font-black text-indigo-700 uppercase tracking-[0.2em]">Synthesizing Travel Intelligence...</p>
-                </div>
-                <span className="text-[10px] font-black text-indigo-400 animate-pulse uppercase">Active AI Node</span>
-              </div>
-              <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                <motion.div animate={{ width: ["0%", "100%"] }} transition={{ duration: 12, ease: "linear", repeat: Infinity }} className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500" />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      {/* Streaming indicator */}
+      {isPlanning && !plan && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 p-4 rounded-2xl bg-card shadow-card">
+          <div className="flex items-center gap-2 mb-2">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <p className="text-xs font-semibold text-muted-foreground">your itinerary with images...</p>
+          </div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <motion.div animate={{ width: ["0%", "100%"] }} transition={{ duration: 8, ease: "linear", repeat: Infinity }} className="h-full rounded-full gradient-hero" />
+          </div>
+        </motion.div>
+      )}
 
       {/* Generated Plan */}
       <AnimatePresence>
