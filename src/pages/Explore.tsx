@@ -24,7 +24,7 @@ const Explore = () => {
   });
   const [isGenerating, setIsGenerating] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-   const navigate = useNavigate();
+  const navigate = useNavigate();
   const searchRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -71,7 +71,7 @@ const Explore = () => {
 
   const handleGenerateCard = async () => {
     if (!searchQuery.trim() || isGenerating) return;
-    
+
     // Use the built-in OpenRouter key so travelers don't have to provide their own
     const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
     if (!apiKey) {
@@ -82,12 +82,27 @@ const Explore = () => {
     setIsGenerating(true);
     toast({ title: "✨ AI is Researching", description: `Uncovering secrets of "${searchQuery}"...`, duration: 3000 });
 
+    const fetchWithRetry = async (url: string, options: RequestInit, maxRetries = 3): Promise<Response> => {
+      let attempt = 0;
+      let delay = 2000;
+      while (attempt < maxRetries) {
+        const response = await fetch(url, options);
+        if (response.status !== 429) return response;
+        attempt++;
+        console.warn(`[API] Rate limited (429). Retrying attempt ${attempt} of ${maxRetries}...`);
+        if (attempt >= maxRetries) return response;
+        await new Promise(res => setTimeout(res, delay));
+        delay *= 2;
+      }
+      throw new Error("Max retries reached");
+    };
+
     try {
       // 1. Fetch real imagery from Pexels first or concurrent
       const imageUrl = await fetchPexelsImage(searchQuery);
 
       // 2. Fetch metadata from AI
-      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const resp = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -128,14 +143,14 @@ const Explore = () => {
 
       const data = await resp.json();
       const newDest = JSON.parse(data.choices[0].message.content);
-      
+
       // Combine AI metadata with real Pexels image
       newDest.image = imageUrl;
       if (!newDest.id.includes("-ai")) newDest.id = `${newDest.id}-ai`;
 
       const existingAI = JSON.parse(localStorage.getItem("planzo_ai_destinations") || "[]");
       localStorage.setItem("planzo_ai_destinations", JSON.stringify([newDest, ...existingAI]));
-      
+
       setSearchQuery("");
       setRefreshKey(prev => prev + 1);
       toast({ title: "Research Complete! 🎊", description: `${newDest.name} added to your map.` });
@@ -225,11 +240,10 @@ const Explore = () => {
           <button
             key={tag}
             onClick={() => setActiveFilter(tag)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
-              activeFilter === tag
-                ? "gradient-hero text-primary-foreground"
-                : "bg-card text-muted-foreground shadow-card hover:text-foreground"
-            }`}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${activeFilter === tag
+              ? "gradient-hero text-primary-foreground"
+              : "bg-card text-muted-foreground shadow-card hover:text-foreground"
+              }`}
           >
             {tag}
           </button>
@@ -256,43 +270,43 @@ const Explore = () => {
             <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 animate-pulse" />
             <div className="flex flex-col md:flex-row items-center gap-6 relative z-10">
               <div className="h-16 w-16 rounded-2xl bg-primary/20 flex items-center justify-center border border-primary/30 shadow-inner">
-                 <Brain className="h-8 w-8 text-primary animate-pulse" />
+                <Brain className="h-8 w-8 text-primary animate-pulse" />
               </div>
               <div className="flex-1 text-center md:text-left">
                 <h3 className="text-xl font-display font-black text-primary tracking-tight">AI is researching "{searchQuery}"</h3>
                 <p className="text-sm text-muted-foreground mt-1 max-w-md">Our AI scouts are gathering local highlights, food spots, and travel tips for you...</p>
                 <div className="mt-4 flex items-center gap-2">
-                   <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                      <motion.div 
-                        initial={{ x: "-100%" }}
-                        animate={{ x: "0%" }}
-                        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                        className="h-full w-full bg-gradient-to-r from-primary/40 via-primary to-primary/40"
-                      />
-                   </div>
-                   <span className="text-[10px] font-black text-primary/60 uppercase whitespace-nowrap">Live Probe</span>
+                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ x: "-100%" }}
+                      animate={{ x: "0%" }}
+                      transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                      className="h-full w-full bg-gradient-to-r from-primary/40 via-primary to-primary/40"
+                    />
+                  </div>
+                  <span className="text-[10px] font-black text-primary/60 uppercase whitespace-nowrap">Live Probe</span>
                 </div>
               </div>
             </div>
           </motion.div>
         ) : searchQuery.trim().length > 1 && filtered.length === 0 && (
           <motion.div
-             initial={{ opacity: 0, height: 0, y: -10 }}
-             animate={{ opacity: 1, height: "auto", y: 0 }}
-             exit={{ opacity: 0, height: 0 }}
-             className="mt-4 mb-2 overflow-hidden"
+            initial={{ opacity: 0, height: 0, y: -10 }}
+            animate={{ opacity: 1, height: "auto", y: 0 }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-4 mb-2 overflow-hidden"
           >
-            <div 
-               className="p-4 rounded-2xl bg-gradient-to-r from-primary/5 to-transparent border border-primary/20 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm"
+            <div
+              className="p-4 rounded-2xl bg-gradient-to-r from-primary/5 to-transparent border border-primary/20 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm"
             >
               <div className="flex items-center gap-3 w-full">
-                 <div className="h-10 w-10 flex-shrink-0 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-                    <Sparkles className="h-5 w-5 text-primary" />
-                 </div>
-                 <div className="flex-1 text-left">
-                    <h3 className="font-bold text-primary font-display text-sm md:text-base leading-tight">Instant AI Research active</h3>
-                    <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">Keep typing... if we can't find it, our AI will automatically research it for you!</p>
-                 </div>
+                <div className="h-10 w-10 flex-shrink-0 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1 text-left">
+                  <h3 className="font-bold text-primary font-display text-sm md:text-base leading-tight">Instant AI Research active</h3>
+                  <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">Keep typing... if we can't find it, our AI will automatically research it for you!</p>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -326,11 +340,10 @@ const Explore = () => {
               {/* Wishlist button */}
               <button
                 onClick={(e) => toggleWishlist(e, String(d.id), d.name)}
-                className={`absolute bottom-3 right-3 p-2 rounded-full backdrop-blur-md transition-all shadow-md ${
-                  wishlist.includes(String(d.id))
-                    ? "bg-red-500 text-white"
-                    : "bg-white/30 text-white hover:bg-white/50"
-                }`}
+                className={`absolute bottom-3 right-3 p-2 rounded-full backdrop-blur-md transition-all shadow-md ${wishlist.includes(String(d.id))
+                  ? "bg-red-500 text-white"
+                  : "bg-white/30 text-white hover:bg-white/50"
+                  }`}
               >
                 <Heart className={`h-3.5 w-3.5 ${wishlist.includes(String(d.id)) ? "fill-white" : ""}`} />
               </button>

@@ -37,11 +37,11 @@ interface TripResponse {
     activities: number;
     miscellaneous: number;
   };
-  travelOptions: { 
-    mode: string; 
-    from: string; 
-    to: string; 
-    estimatedCost: number; 
+  travelOptions: {
+    mode: string;
+    from: string;
+    to: string;
+    estimatedCost: number;
     duration: string;
     operator?: string;
     operatorLogo?: string;
@@ -59,9 +59,9 @@ interface TripResponse {
     arrivalTerminal?: string;
     isRecommended?: boolean;
   }[];
-  localTransport: { 
-    mode: string; 
-    estimatedDailyCost: number; 
+  localTransport: {
+    mode: string;
+    estimatedDailyCost: number;
     notes: string;
     provider?: string;
     providerLogo?: string;
@@ -128,10 +128,36 @@ class AIError extends Error {
 
 const FALLBACK_IMAGE = "https://images.pexels.com/photos/1271619/pexels-photo-1271619.jpeg?auto=compress&cs=tinysrgb&w=800";
 
+// ─── Helper: Fetch with Retry ────────────────────────────────────────
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  let attempt = 0;
+  let delay = 2000; // start with 2 seconds
+
+  while (attempt < maxRetries) {
+    const response = await fetch(url, options);
+
+    if (response.status !== 429) {
+      return response; // Success or non-retriable error
+    }
+
+    attempt++;
+    console.warn(`[API] Rate limited (429). Retrying attempt ${attempt} of ${maxRetries} after ${delay}ms...`);
+
+    if (attempt >= maxRetries) {
+      return response; // Return the 429 response after max retries
+    }
+
+    await new Promise(resolve => setTimeout(resolve, delay));
+    delay *= 2; // Exponential backoff
+  }
+
+  throw new Error("Max retries reached");
+}
+
 // ─── 1. Generate Trip via AI ─────────────────────────────────────────
 async function generateTrip(req: TripRequest): Promise<TripResponse> {
-  const AI_API_KEY = Deno.env.get("AI_API_KEY");
-  if (!AI_API_KEY) throw new Error("AI_API_KEY not configured");
+  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+  if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
 
   const systemPrompt = `You are a professional travel planning AI. Given a user's travel query and a "vibe" preference, generate a comprehensive trip plan.
 Vibe Context:
@@ -202,16 +228,16 @@ Generate a SMARTER packing list (10-15 items) that is highly relevant to:
 
 Budget values must be in INR (₹). Be specific with place names, coordinates, and image search queries. Generate ${req.days || 3} days of itinerary for ${req.travelers || 2} travelers.`;
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${AI_API_KEY}`,
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
       "HTTP-Referer": "https://planzo.ai",
       "X-Title": "Planzo AI",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "meta-llama/llama-3-70b-instruct",
+      model: "meta-llama/llama-3.3-70b-instruct",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: req.query },
@@ -325,8 +351,8 @@ async function regenerateSingleDay(
   dayIndex: number,
   originalRequest: TripRequest,
 ): Promise<TripResponse["itinerary"][number]> {
-  const AI_API_KEY = Deno.env.get("AI_API_KEY");
-  if (!AI_API_KEY) throw new Error("AI_API_KEY not configured");
+  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+  if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
 
   const dayToRegenerate = dayIndex + 1; // 1-based for prompt
 
@@ -345,16 +371,16 @@ async function regenerateSingleDay(
 
   const contextMessage = `Here is the existing itinerary for context (you are regenerating Day ${dayToRegenerate}):\n${JSON.stringify(existingPlan.itinerary.map(d => ({ day: d.day, title: d.title, activities: d.activities.map(a => a.name) })), null, 2)}`;
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${AI_API_KEY}`,
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
       "HTTP-Referer": "https://planzo.ai",
       "X-Title": "Planzo AI",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "meta-llama/llama-3-70b-instruct",
+      model: "meta-llama/llama-3.3-70b-instruct",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: contextMessage },

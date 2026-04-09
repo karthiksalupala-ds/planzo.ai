@@ -128,6 +128,21 @@ export function parseItineraryJSON(raw: string): TripPlan | null {
   }
 }
 
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  let attempt = 0;
+  let delay = 2000;
+  while (attempt < maxRetries) {
+    const response = await fetch(url, options);
+    if (response.status !== 429) return response;
+    attempt++;
+    console.warn(`[API] Rate limited (429). Retrying attempt ${attempt} of ${maxRetries}...`);
+    if (attempt >= maxRetries) return response;
+    await new Promise(res => setTimeout(res, delay));
+    delay *= 2;
+  }
+  throw new Error("Max retries reached");
+}
+
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 export interface ChatParams {
@@ -187,7 +202,7 @@ Always prioritize helpful travel guidance over technical explanations.`;
   messages.push({ role: "user", content: params.query });
 
   try {
-    const resp = await fetch(OPENROUTER_URL, {
+    const resp = await fetchWithRetry(OPENROUTER_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -275,7 +290,7 @@ They do NOT want to do this activity: "${oldActivityName}".
 Suggest ONE alternative activity that is different but fits the mood and city. Return JSON strictly.`;
 
   try {
-    const resp = await fetch(OPENROUTER_URL, {
+    const resp = await fetchWithRetry(OPENROUTER_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -296,21 +311,20 @@ Suggest ONE alternative activity that is different but fits the mood and city. R
 
     const data = await resp.json();
     const content = data?.choices?.[0]?.message?.content || "";
-    
+
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
-    
+
     // Remove potential leading/trailing non-json chars
     const start = jsonStr.indexOf('{');
     const end = jsonStr.lastIndexOf('}');
     if (start !== -1 && end !== -1 && end > start) {
       return JSON.parse(jsonStr.substring(start, end + 1));
     }
-    
+
     return JSON.parse(jsonStr);
   } catch (e) {
     console.error("Alternative generation error", e);
     return null;
   }
 }
-
