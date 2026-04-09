@@ -38,6 +38,48 @@ const moods = [
   { id: "family", label: "Family", icon: Baby },
   { id: "solo", label: "Solo", icon: User },
 ];
+
+// ── AI Caption Cycler Component ──────────────────────────────────────
+const AI_CAPTIONS = [
+  { icon: "✈️", title: "Booking your imagination...", sub: "Scanning 185+ destinations for the perfect match" },
+  { icon: "🗺️", title: "Charting unexplored routes...", sub: "Calculating optimal day-by-day experiences" },
+  { icon: "🌤️", title: "Checking the skies...", sub: "Fetching live weather & seasonal insights" },
+  { icon: "🏨", title: "Curating your stay...", sub: "Matching stays to your budget & vibe" },
+  { icon: "🍜", title: "Scouting local eats...", sub: "Finding must-try dishes and hidden gems" },
+  { icon: "💡", title: "Crafting insider tips...", sub: "Sourcing pro travel advice for your itinerary" },
+  { icon: "🎒", title: "Packing your bags...", sub: "Building a smart packing list for your journey" },
+  { icon: "🎯", title: "Almost there...", sub: "Putting the final touches on your perfect trip" },
+];
+
+function AICaptionCycler({ destination }: { destination: string }) {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setIndex(i => (i + 1) % AI_CAPTIONS.length), 2800);
+    return () => clearInterval(t);
+  }, []);
+  const cap = AI_CAPTIONS[index];
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={index}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-col items-center gap-2"
+        >
+          <span className="text-5xl">{cap.icon}</span>
+          <p className="text-xl font-black text-white tracking-tight">{cap.title}</p>
+          <p className="text-sm text-white/40 font-medium">
+            {destination ? `${destination} — ${cap.sub}` : cap.sub}
+          </p>
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
 const PlanTrip = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -797,26 +839,6 @@ const PlanTrip = () => {
                   style={{ '--tw-ring-color': activeConfig.glow } as any}
                 />
               </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center gap-2 ml-1">
-                  <Zap className="h-3 w-3" style={{ color: activeConfig.color }} /> Vibe
-                </label>
-                <div className="relative">
-                  <select
-                    value={vibe}
-                    onChange={(e) => setVibe(e.target.value)}
-                    className="w-full px-5 py-4 rounded-[22px] bg-slate-100/40 text-sm text-slate-900 outline-none focus:ring-4 border border-slate-200/60 transition-all font-bold appearance-none cursor-pointer focus:bg-white"
-                    style={{ '--tw-ring-color': activeConfig.glow } as any}
-                  >
-                    <option value="Standard">Standard</option>
-                    <option value="Budget">Budget</option>
-                    <option value="Luxury">Luxury</option>
-                    <option value="Adventure">Adventure</option>
-                  </select>
-                  <ChevronRight className="absolute right-5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 rotate-90 pointer-events-none" />
-                </div>
-              </div>
             </div>
 
             <motion.button
@@ -868,16 +890,62 @@ const PlanTrip = () => {
         {/* Streaming indicator */}
         <AnimatePresence>
           {isPlanning && !plan && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-8 p-6 rounded-[32px] bg-white border border-indigo-100 shadow-xl max-w-2xl mx-auto">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
-                  <p className="text-xs font-black text-indigo-700 uppercase tracking-[0.2em]">Synthesizing Travel Intelligence...</p>
+            <motion.div
+              key="ai-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[9999] flex items-center justify-center"
+              style={{ background: "rgba(10, 8, 30, 0.92)", backdropFilter: "blur(24px)" }}
+            >
+              {/* Animated blobs */}
+              <motion.div
+                className="absolute top-1/4 left-1/4 rounded-full opacity-20 blur-3xl pointer-events-none"
+                style={{ width: 500, height: 500, background: "radial-gradient(circle, #6366f1 0%, transparent 70%)" }}
+                animate={{ scale: [1, 1.2, 1], x: [0, 30, 0], y: [0, -20, 0] }}
+                transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+              />
+              <motion.div
+                className="absolute bottom-1/4 right-1/4 rounded-full opacity-15 blur-3xl pointer-events-none"
+                style={{ width: 400, height: 400, background: "radial-gradient(circle, #06b6d4 0%, transparent 70%)" }}
+                animate={{ scale: [1, 1.15, 1], x: [0, -20, 0], y: [0, 20, 0] }}
+                transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+              />
+
+              <div className="relative z-10 flex flex-col items-center gap-8 px-6 text-center max-w-lg w-full">
+                {/* Spinning orb */}
+                <div className="relative">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                    className="h-24 w-24 rounded-full border-2 border-indigo-500/30"
+                    style={{ borderTopColor: "#6366f1" }}
+                  />
+                  <motion.div
+                    animate={{ rotate: -360 }}
+                    transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+                    className="absolute inset-2 rounded-full border-2 border-cyan-500/20"
+                    style={{ borderBottomColor: "#06b6d4" }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Sparkles className="h-10 w-10 text-indigo-400" />
+                  </div>
                 </div>
-                <span className="text-[10px] font-black text-indigo-400 animate-pulse uppercase">Active AI Node</span>
-              </div>
-              <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                <motion.div animate={{ width: ["0%", "100%"] }} transition={{ duration: 12, ease: "linear", repeat: Infinity }} className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500" />
+
+                {/* Cycling captions */}
+                <AICaptionCycler destination={destination} />
+
+                {/* Progress bar */}
+                <div className="w-full max-w-xs">
+                  <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                    <motion.div
+                      animate={{ x: ["-100%", "100%"] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      className="h-full w-1/2 rounded-full bg-gradient-to-r from-transparent via-indigo-400 to-transparent"
+                    />
+                  </div>
+                  <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] mt-4">Powered by Planzo AI</p>
+                </div>
               </div>
             </motion.div>
           )}
