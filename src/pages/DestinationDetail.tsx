@@ -95,7 +95,7 @@ const DestinationDetail = () => {
   const mapEmbedUrl = `https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(destination.name + ", India")}&zoom=12`;
 
   return (
-    <div className="min-h-screen pb-8">
+    <div className="min-h-screen pb-28">
       {/* Hero Image */}
       <div className="relative h-72 md:h-96 overflow-hidden">
         <img
@@ -410,20 +410,27 @@ const DestinationDetail = () => {
           )}
         </motion.div>
 
-        {/* CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="mt-8"
-        >
+      </div>
+
+      {/* Sticky CTA */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 p-4 bg-background/90 backdrop-blur-xl border-t border-border/60">
+        <div className="max-w-3xl mx-auto flex items-center gap-3">
+          <button
+            onClick={toggleWishlist}
+            className={`h-12 px-4 rounded-xl border border-border flex items-center gap-2 text-sm font-semibold transition-colors ${
+              isWishlisted ? "bg-red-500/10 text-red-500" : "bg-card text-foreground hover:bg-muted/50"
+            }`}
+          >
+            <Heart className={`h-4 w-4 ${isWishlisted ? "fill-red-500" : ""}`} />
+            {isWishlisted ? "Saved" : "Save"}
+          </button>
           <button
             onClick={() => navigate(`/plan?dest=${destination.name}&days=${parseInt(destination.days)}&budget=${parseInt(destination.price.replace(/\\D/g, ""))}`)}
-            className="w-full py-4 rounded-2xl gradient-hero text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-elevated"
+            className="flex-1 h-12 rounded-xl gradient-hero text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-elevated"
           >
             Plan Trip to {destination.name.split(",")[0]}
           </button>
-        </motion.div>
+        </div>
       </div>
     </div>
   );

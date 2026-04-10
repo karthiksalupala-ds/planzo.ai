@@ -4,13 +4,14 @@ import { Mail, Lock, User, Plane, Loader2, Eye, EyeOff, CheckCircle, Sparkles } 
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { hasSupabaseConfig, supabase, supabaseConfigError } from "@/integrations/supabase/client";
 
 const friendlyAuthError = (msg: string) => {
   if (!msg) return "Something went wrong. Please try again.";
   const lower = msg.toLowerCase();
-  if (lower.includes("invalid login")) return "Incorrect email or password. Please try again.";
+  if (lower.includes("invalid login")) return "Incorrect credentials or account not verified. Check your email inbox/spam for verification, then try again.";
   if (lower.includes("email not confirmed")) return "Please check your email and confirm your account to sign in.";
+  if (lower.includes("invalid credentials")) return "Incorrect credentials or account not verified. Check your email inbox/spam for verification, then try again.";
   if (lower.includes("already registered")) return "An account with this email already exists. Try signing in.";
   if (lower.includes("weak password")) return "Password must be at least 6 characters.";
   if (lower.includes("rate limit")) return "Too many attempts. Please wait a moment.";
@@ -32,7 +33,9 @@ const Auth = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) return;
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPassword = password.trim();
+    if (!normalizedEmail || !normalizedPassword) return;
     if (!isLogin && !displayName.trim()) {
       toast({ title: "Missing Information", description: "Please enter a display name.", variant: "destructive" });
       return;
@@ -40,7 +43,7 @@ const Auth = () => {
     setLoading(true);
 
     if (isLogin) {
-      const { error } = await signIn(email, password);
+      const { error } = await signIn(normalizedEmail, normalizedPassword);
       if (error) {
         toast({ title: "Login failed", description: friendlyAuthError(error), variant: "destructive" });
       } else {
@@ -48,10 +51,11 @@ const Auth = () => {
         navigate("/");
       }
     } else {
-      const { error } = await signUp(email, password, displayName);
+      const { error } = await signUp(normalizedEmail, normalizedPassword, displayName);
       if (error) {
         toast({ title: "Sign up failed", description: friendlyAuthError(error), variant: "destructive" });
       } else {
+        setEmail(normalizedEmail);
         setSignupSuccess(true);
       }
     }
@@ -59,6 +63,11 @@ const Auth = () => {
   };
 
   const handleGoogleSignIn = async () => {
+    if (!hasSupabaseConfig) {
+      toast({ title: "Configuration missing", description: supabaseConfigError, variant: "destructive" });
+      return;
+    }
+
     setGoogleLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -77,21 +86,36 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-5">
+    <div className="min-h-screen bg-background px-4 py-8 sm:px-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-sm"
+        className="mx-auto w-full max-w-sm"
       >
-        <div className="flex flex-col items-center mb-8">
-          <div className="h-14 w-14 rounded-2xl gradient-hero flex items-center justify-center shadow-elevated mb-4">
+        <div className="mb-6 flex flex-col items-center">
+          <div className="mb-3 h-14 w-14 rounded-2xl gradient-hero flex items-center justify-center shadow-elevated">
             <Plane className="h-7 w-7 text-primary-foreground" />
           </div>
           <h1 className="font-display text-2xl font-bold text-foreground">Planzo.ai</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             {isLogin ? "Welcome back, traveler" : "Start your journey"}
           </p>
-          <span className="mt-2 text-[11px] text-primary/80 font-semibold bg-primary/10 px-3 py-1 rounded-full">✈️ Join 1,000+ travelers already planning</span>
+          <div className="mt-4 grid w-full grid-cols-2 rounded-xl border border-border bg-muted/30 p-1">
+            <button
+              type="button"
+              onClick={() => { setIsLogin(true); setSignupSuccess(false); }}
+              className={`rounded-lg py-2 text-sm font-medium transition-colors ${isLogin ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsLogin(false); setSignupSuccess(false); }}
+              className={`rounded-lg py-2 text-sm font-medium transition-colors ${!isLogin ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
+            >
+              Create account
+            </button>
+          </div>
         </div>
 
         {signupSuccess ? (
@@ -115,13 +139,12 @@ const Auth = () => {
             </button>
           </motion.div>
         ) : (
-          <div className="space-y-4 p-6 rounded-2xl bg-card shadow-card">
-            {/* Google Sign In */}
+          <div className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
             <button
               type="button"
               onClick={handleGoogleSignIn}
               disabled={googleLoading}
-              className="w-full py-3 rounded-xl bg-muted/50 text-foreground font-semibold text-sm flex items-center justify-center gap-3 hover:bg-muted transition-colors disabled:opacity-50 border border-border"
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-muted/40 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50"
             >
               {googleLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -152,7 +175,7 @@ const Auth = () => {
                     placeholder="Display name"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-shadow"
+                    className="w-full rounded-xl border border-border bg-background pl-10 pr-4 py-3 text-sm outline-none transition-shadow focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
               )}
@@ -165,7 +188,7 @@ const Auth = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   autoComplete="email"
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-shadow"
+                  className="w-full rounded-xl border border-border bg-background pl-10 pr-4 py-3 text-sm outline-none transition-shadow focus:ring-2 focus:ring-primary/20"
                 />
               </div>
               <div className="relative">
@@ -178,7 +201,7 @@ const Auth = () => {
                   required
                   autoComplete={isLogin ? "current-password" : "new-password"}
                   minLength={6}
-                  className="w-full pl-10 pr-10 py-3 rounded-xl bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-shadow"
+                  className="w-full rounded-xl border border-border bg-background pl-10 pr-10 py-3 text-sm outline-none transition-shadow focus:ring-2 focus:ring-primary/20"
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -200,44 +223,56 @@ const Auth = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 rounded-xl gradient-hero text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-xl gradient-hero py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {isLogin ? "Sign In" : "Create Account"}
               </button>
 
-              <div className="flex items-center gap-3 pt-1">
+              {isLogin && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/forgot-password${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ""}`)}
+                  className="w-full rounded-xl border border-border bg-background py-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  Reset password now
+                </button>
+              )}
+
+              <div className="flex items-center gap-3 pt-1.5">
                 <div className="flex-1 h-px bg-border/50" />
                 <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Or Testing</span>
                 <div className="flex-1 h-px bg-border/50" />
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail("test@planzo.ai");
-                  setPassword("password");
-                  setTimeout(() => {
-                    const form = document.querySelector('form');
-                    if (form) form.requestSubmit();
-                  }, 100);
-                }}
-                className="w-full py-3 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-500 font-bold text-xs flex items-center justify-center gap-2 hover:bg-amber-500/20 transition-all border border-amber-500/20 shadow-sm"
-              >
-                <Sparkles className="h-3.5 w-3.5 animate-pulse" />
-                Quick Test Login (No Network)
-              </button>
+              {!hasSupabaseConfig && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail("test@planzo.ai");
+                    setPassword("password");
+                    setTimeout(() => {
+                      const form = document.querySelector('form');
+                      if (form) form.requestSubmit();
+                    }, 100);
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 py-3 text-xs font-bold text-amber-600 shadow-sm transition-all hover:bg-amber-500/20 dark:text-amber-500"
+                >
+                  <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+                  Quick Test Login (No Network)
+                </button>
+              )}
             </form>
           </div>
         )}
 
-        <p className="text-center text-sm text-muted-foreground mt-4">
+        <p className="mt-4 text-center text-sm text-muted-foreground">
           {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-          <button onClick={() => { setIsLogin(!isLogin); setSignupSuccess(false); }} className="text-primary font-semibold hover:underline">
+          <button onClick={() => { setIsLogin(!isLogin); setSignupSuccess(false); }} className="font-semibold text-primary hover:underline">
             {isLogin ? "Sign Up" : "Sign In"}
           </button>
         </p>
-        <div className="text-center mt-3">
+        <div className="mt-3 text-center">
           <button
             onClick={() => navigate("/")}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"

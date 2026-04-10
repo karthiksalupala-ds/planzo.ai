@@ -42,6 +42,7 @@ const TripExpenses = () => {
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachCooldown, setCoachCooldown] = useState(false);
   const [coachCooldownSeconds, setCoachCooldownSeconds] = useState(0);
+  const [softCaps, setSoftCaps] = useState<Record<string, number>>({});
 
   // New expense form
   const [newCategory, setNewCategory] = useState("food");
@@ -49,6 +50,60 @@ const TripExpenses = () => {
   const [newDesc, setNewDesc] = useState("");
   const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0]);
   const [adding, setAdding] = useState(false);
+
+  const buildFallbackCoaching = (
+    title: string,
+    plannedTotal: number,
+    spentTotal: number,
+    actualByCategory: Record<string, number>,
+    plannedByCategory: Record<string, number>
+  ): ExpenseCoaching => {
+    const safePlanned = Math.max(plannedTotal, 1);
+    const variance = Math.abs(spentTotal - plannedTotal) / safePlanned;
+    const overallScore = Math.max(35, Math.min(98, Math.round(100 - variance * 100)));
+    const grade = overallScore >= 90 ? "A+" : overallScore >= 80 ? "A" : overallScore >= 70 ? "B+" : overallScore >= 60 ? "B" : "C";
+    const scoreLabel =
+      spentTotal <= plannedTotal
+        ? "Good Budget Discipline"
+        : spentTotal <= plannedTotal * 1.1
+          ? "Slight Overspend"
+          : "Budget Needs Tuning";
+    const savingsValue = Math.max(0, plannedTotal - spentTotal);
+
+    const categoryBreakdown = Object.entries(actualByCategory).map(([category, actual]) => {
+      const planned = plannedByCategory[category] || 0;
+      const over = actual > planned;
+      return {
+        category,
+        planned,
+        actual,
+        verdict: over ? "over" : "under",
+        tip: over
+          ? "Try setting a daily cap for this category and track every spend in real time."
+          : "Great control here - keep the same habit on your next trip.",
+      };
+    });
+
+    return {
+      overallScore,
+      scoreLabel,
+      totalPlanned: `₹${plannedTotal.toLocaleString("en-IN")}`,
+      totalSpent: `₹${spentTotal.toLocaleString("en-IN")}`,
+      savings: `₹${savingsValue.toLocaleString("en-IN")}`,
+      budgetGrade: grade,
+      categoryBreakdown,
+      topInsights: [
+        `${title}: you used ${Math.round((spentTotal / safePlanned) * 100)}% of your planned budget.`,
+        spentTotal > plannedTotal
+          ? `Overspend is ₹${(spentTotal - plannedTotal).toLocaleString("en-IN")}; focus on food/transport optimizations next time.`
+          : `You stayed within budget by ₹${(plannedTotal - spentTotal).toLocaleString("en-IN")}.`,
+      ],
+      nextTripTips: [
+        "Keep a 10% emergency buffer separate from your core budget.",
+        "Book intercity transport early and track meal spend daily.",
+      ],
+    };
+  };
 
   useEffect(() => {
     if (!user) {
@@ -79,6 +134,24 @@ const TripExpenses = () => {
 
     void loadData();
   }, [navigate, tripId, user]);
+
+  useEffect(() => {
+    if (!tripId) return;
+    try {
+      const caps = JSON.parse(localStorage.getItem(`planzo_trip_caps_${tripId}`) || "{}");
+      setSoftCaps(caps);
+    } catch {
+      setSoftCaps({});
+    }
+  }, [tripId]);
+
+  const setCategorySoftCap = (category: string, amount: number) => {
+    if (!tripId || amount <= 0) return;
+    const next = { ...softCaps, [category]: Math.round(amount) };
+    setSoftCaps(next);
+    localStorage.setItem(`planzo_trip_caps_${tripId}`, JSON.stringify(next));
+    toast({ title: "Soft cap saved", description: `${categoryConfig[category]?.label || category}: ₹${Math.round(amount).toLocaleString("en-IN")}` });
+  };
 
   const addExpense = async () => {
     if (!newAmount || !user || !tripId) return;
@@ -111,16 +184,30 @@ const TripExpenses = () => {
     setCoachLoading(true);
     setCoaching(null);
 
-    // Use budgetHealth.userBudget — the correct field in TripPlan
-    const plannedBudget = trip.plan_data?.budgetHealth || {};
+    const plannedTotal =
+      Number(trip.plan_data?.budgetHealth?.userBudget) ||
+      Number(trip.budget) ||
+      Number(trip.plan_data?.budgetHealth?.totalEstimated) ||
+      0;
+
+    const plannedByCategory: Record<string, number> = {
+      hotels: Number(trip.plan_data?.budgetBreakdown?.accommodation) || 0,
+      food: Number(trip.plan_data?.budgetBreakdown?.food) || 0,
+      activities: Number(trip.plan_data?.budgetBreakdown?.activities) || 0,
+      transport: Number(trip.plan_data?.budgetBreakdown?.transport) || 0,
+      shopping: Number(trip.plan_data?.budgetBreakdown?.miscellaneous) || 0,
+    };
+
     const actualByCategory: Record<string, number> = {};
     expenses.forEach((e) => {
       actualByCategory[e.category] = (actualByCategory[e.category] || 0) + Number(e.amount);
     });
 
+    const spentTotal = Object.values(actualByCategory).reduce((acc, n) => acc + n, 0);
+
     const { data, error } = await supabase.functions.invoke("post-trip-coach", {
       body: {
-        plannedBudget,
+        plannedBudget: { total: plannedTotal, byCategory: plannedByCategory },
         actualExpenses: actualByCategory,
         tripTitle: trip.title,
         mood: trip.mood,
@@ -129,8 +216,12 @@ const TripExpenses = () => {
     });
 
     setCoachLoading(false);
-    if (error) {
-      toast({ title: "Coach Error", description: "Could not get coaching tips.", variant: "destructive" });
+    if (error || !data) {
+      setCoaching(buildFallbackCoaching(trip.title || "Trip", plannedTotal, spentTotal, actualByCategory, plannedByCategory));
+      toast({
+        title: "AI Coach fallback",
+        description: error?.message || "Live coach unavailable, showing local coaching analysis.",
+      });
     } else {
       setCoaching(data);
       // 60-second cooldown to prevent API spam
@@ -147,6 +238,20 @@ const TripExpenses = () => {
 
   const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
   const plannedBudget = trip?.plan_data?.budgetHealth?.userBudget || trip?.budget || 0;
+  const dailySpend = expenses
+    .slice()
+    .sort((a, b) => new Date(a.expense_date).getTime() - new Date(b.expense_date).getTime())
+    .reduce<Array<{ date: string; total: number }>>((acc, exp) => {
+      const key = exp.expense_date;
+      const last = acc[acc.length - 1];
+      if (last && last.date === key) {
+        last.total += Number(exp.amount);
+        return acc;
+      }
+      acc.push({ date: key, total: Number(exp.amount) });
+      return acc;
+    }, []);
+  const maxDaily = Math.max(1, ...dailySpend.map((d) => d.total));
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
@@ -214,7 +319,39 @@ const TripExpenses = () => {
             );
           })}
         </div>
+        {Object.keys(softCaps).length > 0 && (
+          <div className="mt-4 pt-3 border-t border-border/50">
+            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-2">Soft caps</p>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(softCaps).map(([category, amount]) => (
+                <span key={category} className="px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">
+                  {categoryConfig[category]?.label || category}: ₹{amount.toLocaleString("en-IN")}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </motion.div>
+
+      {/* Daily trend */}
+      {dailySpend.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="mt-4 p-4 rounded-2xl bg-card shadow-card">
+          <h3 className="font-display font-semibold text-foreground text-sm flex items-center gap-2 mb-3">
+            <TrendingUp className="h-4 w-4 text-primary" /> Daily Spend Trend
+          </h3>
+          <div className="space-y-2">
+            {dailySpend.slice(-7).map((d) => (
+              <div key={d.date} className="flex items-center gap-3">
+                <span className="text-[10px] text-muted-foreground w-20">{new Date(d.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full gradient-hero rounded-full" style={{ width: `${Math.max(8, (d.total / maxDaily) * 100)}%` }} />
+                </div>
+                <span className="text-xs font-semibold text-foreground w-20 text-right">₹{d.total.toLocaleString("en-IN")}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Add Expense Button */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mt-4 flex gap-3">
@@ -341,6 +478,12 @@ const TripExpenses = () => {
                         </div>
                         <p className="text-xs text-muted-foreground">₹{cat.planned?.toLocaleString("en-IN")} planned → ₹{cat.actual?.toLocaleString("en-IN")} spent</p>
                         <p className="text-xs text-primary mt-1 italic">💡 {cat.tip}</p>
+                        <button
+                          onClick={() => setCategorySoftCap(cat.category, Number(cat.planned || 0))}
+                          className="mt-2 px-2.5 py-1.5 rounded-lg border border-border text-[10px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Set soft cap from plan
+                        </button>
                       </div>
                     );
                   })}

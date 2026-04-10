@@ -35,18 +35,8 @@ const Profile = () => {
   // Settings
   const [isDarkMode, setIsDarkMode] = useState(document.documentElement.classList.contains("dark"));
 
-  // Development Bypass Setup
-  const isDevBypass = !user;
-  const activeUser = user || {
-    id: "dev-mock-user-123",
-    user_metadata: {
-      display_name: "Guest Explorer",
-      avatar_url: ""
-    }
-  };
-
   useEffect(() => {
-    if (user && !isDevBypass) {
+    if (user) {
       supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => {
         if (data) {
           setProfile(data);
@@ -57,63 +47,27 @@ const Profile = () => {
       supabase.from("saved_trips").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).then(({ data }) => {
         if (data) setSavedTrips(data);
       });
-    } else if (isDevBypass) {
-      // Provide mock data for development bypass
-      setProfile({
-        id: "mock",
-        user_id: "dev-mock-user-123",
-        display_name: "Guest Explorer",
-        travel_style: ["Adventure", "Culture"],
-        avatar_url: null,
-        updated_at: new Date().toISOString(),
-        created_at: new Date().toISOString()
-      });
-      setEditName("Guest Explorer");
-      setEditStyles(["Adventure", "Culture"]);
-      setSavedTrips([
-        {
-          id: "mock-trip-1",
-          user_id: "dev-mock-user-123",
-          title: "Kerala",
-          query: "Kerala",
-          mood: "nature",
-          days: 3,
-          budget: 15000,
-          travelers: 2,
-          created_at: new Date().toISOString(),
-          plan_data: {},
-          start_date: null,
-          status: "completed"
-        } as SavedTripRow
-      ]);
+    } else {
+      setProfile(null);
+      setSavedTrips([]);
+      setEditName("");
+      setEditStyles([]);
     }
 
     // Load local wishlist (works without auth)
     const localWishlist = JSON.parse(localStorage.getItem("planzo_wishlist") || "[]");
     setWishlist(localWishlist);
-  }, [user, isDevBypass]);
+  }, [user]);
 
   const handleSignOut = async () => {
-    // Attempt real sign out first if session exists
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      await signOut();
-      navigate("/");
-      toast({ title: "Signed out successfully" });
-      return;
-    }
-
-    if (isDevBypass) {
-      toast({ title: "You are heavily browsing in dev mode. No real sign out required." });
-      return;
-    }
+    await signOut();
+    navigate("/");
+    toast({ title: "Signed out successfully" });
   };
 
   const deleteTrip = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isDevBypass) {
-      await supabase.from("saved_trips").delete().eq("id", id);
-    }
+    await supabase.from("saved_trips").delete().eq("id", id);
     setSavedTrips((prev) => prev.filter((t) => t.id !== id));
     toast({ title: "Trip deleted" });
   };
@@ -127,22 +81,19 @@ const Profile = () => {
   };
 
   const handleSaveProfile = async () => {
-    if (!activeUser) return;
+    if (!user) return;
     setSavingProfile(true);
 
-    if (!isDevBypass) {
-      const { error } = await supabase.from("profiles").update({
-        display_name: editName,
-        travel_style: editStyles
-      }).eq("user_id", activeUser.id);
+    const { error } = await supabase.from("profiles").update({
+      display_name: editName,
+      travel_style: editStyles
+    }).eq("user_id", user.id);
 
-      if (error) {
-        setSavingProfile(false);
-        return toast({ title: "Error saving profile", variant: "destructive" });
-      }
+    if (error) {
+      setSavingProfile(false);
+      return toast({ title: "Error saving profile", variant: "destructive" });
     }
 
-    // Success for both real and dev bypass
     setSavingProfile(false);
     toast({ title: "Profile updated successfully!" });
     setProfile(prev => prev ? { ...prev, display_name: editName, travel_style: editStyles } : null);
@@ -166,94 +117,103 @@ const Profile = () => {
     );
   }
 
-  const displayName = profile?.display_name || activeUser.user_metadata?.display_name || "Traveler";
-  const avatarUrl = activeUser.user_metadata?.avatar_url as string | undefined;
+  if (!user) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-4">
+        <div className="max-w-md w-full rounded-2xl border border-border bg-card p-6 text-center">
+          <h2 className="text-xl font-bold text-foreground">Sign in to view your profile</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Profile, saved trips, and account settings are available only after authentication.
+          </p>
+          <button
+            onClick={() => navigate("/auth")}
+            className="mt-5 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground"
+          >
+            Go to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const displayName = profile?.display_name || user.user_metadata?.display_name || "Traveler";
+  const avatarUrl = user.user_metadata?.avatar_url as string | undefined;
   const travelStyle = profile?.travel_style?.length ? profile.travel_style : ["Adventure", "Budget", "Culture"];
   const daysTraveled = savedTrips.reduce((sum, t) => sum + (t.days || 0), 0);
 
   return (
-    <div className="min-h-screen bg-background pb-10">
+    <div className="min-h-screen bg-background pb-24">
       {/* Cover Header */}
       <div className="h-48 md:h-64 w-full bg-[url('https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=2074&auto=format&fit=crop')] bg-cover bg-center relative">
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-background" />
       </div>
 
-      <div className="px-5 md:container max-w-4xl mx-auto -mt-24 relative z-10">
+      <div className="relative z-10 mx-auto -mt-24 max-w-4xl px-4 md:container">
         {/* Profile Card */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-8 rounded-[32px] bg-card/80 backdrop-blur-xl border border-white/10 shadow-elevated">
-          <div className="flex flex-col md:flex-row gap-8 items-start">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-sm md:p-7">
+          <div className="flex flex-col items-start gap-5 md:flex-row md:gap-7">
             <div className="relative group">
               {avatarUrl ? (
                 <img
                   src={avatarUrl}
                   alt={displayName}
-                  className="h-28 w-28 md:h-36 md:w-36 rounded-[28px] object-cover shadow-2xl ring-4 ring-background/50 group-hover:scale-105 transition-transform duration-500"
+                  className="h-24 w-24 rounded-2xl object-cover ring-2 ring-border md:h-28 md:w-28"
                 />
               ) : (
-                <div className="h-28 w-28 md:h-36 md:w-36 rounded-[28px] gradient-hero flex items-center justify-center shadow-2xl ring-4 ring-background/50 group-hover:scale-105 transition-transform duration-500">
-                  <User className="h-12 w-12 md:h-16 md:w-16 text-primary-foreground" />
+                <div className="flex h-24 w-24 items-center justify-center rounded-2xl gradient-hero ring-2 ring-border md:h-28 md:w-28">
+                  <User className="h-10 w-10 text-primary-foreground md:h-12 md:w-12" />
                 </div>
               )}
-              <div className="absolute -bottom-2 -right-2 h-10 w-10 rounded-xl bg-card border border-border shadow-lg flex items-center justify-center text-primary cursor-pointer hover:scale-110 transition-transform">
-                <Camera className="h-5 w-5" />
-              </div>
             </div>
 
-            <div className="flex-1 w-full pt-2">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="w-full flex-1">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-3">
-                    <h1 className="font-display text-4xl font-bold text-foreground tracking-tight">{displayName}</h1>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h1 className="font-display text-2xl font-bold tracking-tight text-foreground md:text-3xl">{displayName}</h1>
                     {!isEditing && (
-                      <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider border border-primary/20">Explorer Tier</span>
+                      <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">Traveler</span>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground/80 font-medium flex items-center gap-1.5">
-                    {isDevBypass ? (
-                      <span className="flex items-center gap-1.5 text-amber-500/80">
-                        <Shield className="h-3.5 w-3.5" /> Guest Mode (Offline Only)
-                      </span>
-                    ) : (
-                      <>
-                        <Mail className="h-3.5 w-3.5 opacity-60" /> {user?.email}
-                      </>
-                    )}
+                  <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground/80">
+                    <span>
+                      <Mail className="inline h-3.5 w-3.5 opacity-60 mr-1.5" /> {user.email}
+                    </span>
                   </p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <button 
                     onClick={() => navigate("/settings")} 
-                    className="h-11 w-11 rounded-2xl flex items-center justify-center border bg-background border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
-                    <Settings className="h-5 w-5" />
+                    <Settings className="h-4.5 w-4.5" />
                   </button>
                   {isEditing ? (
                     <div className="flex gap-2">
-                      <button onClick={() => setIsEditing(false)} className="px-5 py-2.5 rounded-2xl border border-border text-muted-foreground font-bold text-sm hover:bg-muted/50 transition-colors">Cancel</button>
-                      <button onClick={handleSaveProfile} disabled={savingProfile} className="px-6 py-2.5 rounded-2xl gradient-hero text-white text-sm font-bold flex items-center gap-2 shadow-lg shadow-primary/20">{savingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Save</button>
+                      <button onClick={() => setIsEditing(false)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted/50">Cancel</button>
+                      <button onClick={handleSaveProfile} disabled={savingProfile} className="inline-flex items-center gap-2 rounded-lg gradient-hero px-4 py-2 text-sm font-semibold text-white">{savingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Save</button>
                     </div>
                   ) : (
-                    <button onClick={() => setIsEditing(true)} className="px-6 py-2.5 rounded-2xl bg-foreground text-background text-sm font-bold hover:opacity-90 transition-all flex items-center gap-2 shadow-lg">
+                    <button onClick={() => setIsEditing(true)} className="inline-flex items-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background hover:opacity-90">
                       <Edit2 className="h-3.5 w-3.5" /> Edit Profile
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Stats HUD */}
-              <div className="grid grid-cols-3 gap-8 mt-8 p-6 rounded-2xl bg-muted/30 border border-border/50">
-                <div className="text-center md:text-left">
-                  <p className="font-display text-2xl font-bold text-foreground leading-none">{savedTrips.length}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-2">Trips</p>
+              <div className="mt-5 grid grid-cols-3 rounded-xl border border-border bg-muted/25 p-3">
+                <div className="text-center">
+                  <p className="font-display text-xl font-bold leading-none text-foreground">{savedTrips.length}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">Trips</p>
                 </div>
-                <div className="text-center md:text-left border-x border-border/50 px-4 md:px-8">
-                  <p className="font-display text-2xl font-bold text-foreground leading-none">{wishlist.length}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-2">Wishlist</p>
+                <div className="text-center border-x border-border px-2">
+                  <p className="font-display text-xl font-bold leading-none text-foreground">{wishlist.length}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">Wishlist</p>
                 </div>
-                <div className="text-center md:text-left">
-                  <p className="font-display text-2xl font-bold text-foreground leading-none">{daysTraveled}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-2">Days Out</p>
+                <div className="text-center">
+                  <p className="font-display text-xl font-bold leading-none text-foreground">{daysTraveled}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">Days</p>
                 </div>
               </div>
             </div>
@@ -261,8 +221,8 @@ const Profile = () => {
         </motion.div>
 
         {/* Feature Carousel / Many Stuff */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-          <div className="p-5 rounded-3xl bg-card border border-border flex items-center gap-4 group hover:border-primary/50 transition-colors cursor-pointer shadow-sm">
+        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40">
             <div className="h-12 w-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
               <Sparkles className="h-6 w-6" />
             </div>
@@ -271,7 +231,7 @@ const Profile = () => {
               <p className="text-[11px] text-muted-foreground">Unlock unlimited AI generation</p>
             </div>
           </div>
-          <div className="p-5 rounded-3xl bg-card border border-border flex items-center gap-4 group hover:border-emerald-500/50 transition-colors cursor-pointer shadow-sm">
+          <div className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-emerald-500/40">
             <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
               <TrendingUp className="h-6 w-6" />
             </div>
@@ -280,7 +240,7 @@ const Profile = () => {
               <p className="text-[11px] text-muted-foreground">Travel points earned this month</p>
             </div>
           </div>
-          <div className="p-5 rounded-3xl bg-card border border-border flex items-center gap-4 group hover:border-blue-500/50 transition-colors cursor-pointer shadow-sm">
+          <div className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-blue-500/40">
             <div className="h-12 w-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
               <Shield className="h-6 w-6" />
             </div>
@@ -292,7 +252,7 @@ const Profile = () => {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex gap-4 mt-8 overflow-x-auto scrollbar-hide pb-2 border-b border-border/50">
+        <div className="mt-6 flex gap-2 overflow-x-auto pb-2">
           {[
             { id: "trips", icon: Map, label: "My Journeys" },
             { id: "stats", icon: BarChart3, label: "Analytics" },
@@ -301,10 +261,10 @@ const Profile = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2.5 px-6 py-4 rounded-2xl text-sm font-bold transition-all whitespace-nowrap ${
+              className={`whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
                 activeTab === tab.id 
-                  ? "text-primary bg-primary/5 shadow-sm" 
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                  ? "bg-foreground text-background" 
+                  : "border border-border bg-card text-muted-foreground hover:text-foreground"
               }`}
             >
               <tab.icon className="h-4 w-4" /> {tab.label}

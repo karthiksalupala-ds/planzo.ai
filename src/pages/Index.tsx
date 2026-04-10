@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { MapPin, Hotel, Utensils, Compass, IndianRupee, Calendar, Mountain, Sparkles, TrendingUp, Heart, Palmtree, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -7,7 +7,11 @@ import AISearchBar from "@/components/AISearchBar";
 import DestinationCard from "@/components/DestinationCard";
 import SmartCard from "@/components/SmartCard";
 import CategoryChip from "@/components/CategoryChip";
+import SafeImage from "@/components/SafeImage";
+import DestinationCardSkeleton from "@/components/DestinationCardSkeleton";
 import { getAllDestinations } from "@/data/destinations";
+import { getDestinationFallbackImage } from "@/lib/imageFallbacks";
+import { prefetchImage } from "@/lib/prefetch";
 
 
 const categories = [
@@ -256,7 +260,13 @@ const itemVariants = {
 
 const Index = () => {
   const [activeCategory, setActiveCategory] = useState("All");
+  const [showSkeletons, setShowSkeletons] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const t = setTimeout(() => setShowSkeletons(false), 350);
+    return () => clearTimeout(t);
+  }, []);
 
   const filteredDestinations = activeCategory === "All"
     ? getAllDestinations()
@@ -344,18 +354,26 @@ const Index = () => {
           </button>
         </div>
         <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-4">
-          {filteredDestinations.map((d, i) => (
-            <DestinationCard
-              key={d.id}
-              image={d.image}
-              name={d.name}
-              country={d.state}
-              rating={d.rating}
-              tag={d.tag}
-              index={i}
-              onClick={() => navigate(`/destination/${d.id}`)}
-            />
-          ))}
+          {showSkeletons
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <div key={`featured-skeleton-${i}`} className="w-44 md:w-56 flex-shrink-0">
+                  <DestinationCardSkeleton />
+                </div>
+              ))
+            : filteredDestinations.map((d, i) => (
+                <DestinationCard
+                  key={d.id}
+                  image={d.image}
+                  fallbackImage={getDestinationFallbackImage(d.name, d.category)}
+                  name={d.name}
+                  country={d.state}
+                  rating={d.rating}
+                  tag={d.tag}
+                  index={i}
+                  onHover={() => prefetchImage(d.image)}
+                  onClick={() => navigate(`/destination/${d.id}`)}
+                />
+              ))}
         </div>
       </section>
 
@@ -388,7 +406,7 @@ const Index = () => {
                 item.className
               )}
             >
-              <img 
+              <SafeImage
                 src={item.image} 
                 alt={item.title} 
                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
@@ -466,7 +484,7 @@ const Index = () => {
               className="flex-shrink-0 w-64 group cursor-pointer"
             >
               <div className="relative h-40 rounded-2xl overflow-hidden mb-3">
-                <img src={hotel.image} alt={hotel.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                <SafeImage src={hotel.image} alt={hotel.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                 <div className="absolute top-2 right-2 px-2 py-1 rounded-lg bg-black/40 backdrop-blur-md flex items-center gap-1">
                   <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
                   <span className="text-xs font-bold text-white">{hotel.rating}</span>
@@ -506,7 +524,7 @@ const Index = () => {
               onClick={() => navigate(`/plan?dest=${food.location}`)}
               className="relative h-32 rounded-2xl overflow-hidden group cursor-pointer"
             >
-              <img src={food.image} alt={food.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+              <SafeImage src={food.image} alt={food.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
               <div className="absolute bottom-3 left-3">
                 <h3 className="text-white font-bold text-sm">{food.name}</h3>
@@ -540,7 +558,7 @@ const Index = () => {
               className="flex-shrink-0 w-40 group cursor-pointer"
             >
               <div className="relative h-56 rounded-2xl overflow-hidden mb-2 shadow-card">
-                <img src={activity.image} alt={activity.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                <SafeImage src={activity.image} alt={activity.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                 <div className="absolute bottom-3 left-3">
                   <h3 className="text-white font-bold text-sm">{activity.name}</h3>

@@ -46,7 +46,7 @@ const DesktopNav = () => {
           })}
           {/* Unified profile entry point */}
           <button
-            onClick={() => navigate("/profile")}
+            onClick={() => navigate(user ? "/profile" : "/auth")}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               location.pathname === "/profile"
                 ? "bg-primary/10 text-primary"

@@ -13,6 +13,7 @@ import Profile from "./pages/Profile";
 import SettingsPage from "./pages/SettingsPage";
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import DestinationDetail from "./pages/DestinationDetail";
 import TripExpenses from "./pages/TripExpenses";
 import TripJournal from "./pages/TripJournal";
@@ -41,6 +42,7 @@ const App = () => (
               </Route>
               <Route path="/auth" element={<Auth />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

@@ -1,19 +1,24 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { Link, useSearchParams } from "react-router-dom";
+import { hasSupabaseConfig, supabase, supabaseConfigError } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 const ForgotPassword = () => {
-  const [email, setEmail] = useState("");
+  const [searchParams] = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get("email") || "");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasSupabaseConfig) {
+      toast({ variant: "destructive", title: "Configuration missing", description: supabaseConfigError });
+      return;
+    }
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
         redirectTo: `${window.location.origin}/reset-password`,
       });
 

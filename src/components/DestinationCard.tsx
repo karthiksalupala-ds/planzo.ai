@@ -1,28 +1,33 @@
 import { MapPin, Star } from "lucide-react";
 import { motion } from "framer-motion";
+import SafeImage from "@/components/SafeImage";
 
 interface DestinationCardProps {
   image: string;
+  fallbackImage?: string;
   name: string;
   country: string;
   rating: number;
   tag?: string;
   onClick?: () => void;
+  onHover?: () => void;
   index?: number;
 }
 
-const DestinationCard = ({ image, name, country, rating, tag, onClick, index = 0 }: DestinationCardProps) => {
+const DestinationCard = ({ image, fallbackImage, name, country, rating, tag, onClick, onHover, index = 0 }: DestinationCardProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1, duration: 0.4 }}
       onClick={onClick}
+      onMouseEnter={onHover}
       className="group relative flex-shrink-0 w-44 md:w-56 cursor-pointer"
     >
       <div className="relative overflow-hidden rounded-2xl aspect-[3/4]">
-        <img
+        <SafeImage
           src={image}
+          fallbackSrc={fallbackImage}
           alt={name}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
           loading="lazy"

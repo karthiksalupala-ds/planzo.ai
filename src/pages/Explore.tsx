@@ -1,10 +1,15 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, MapPin, Star, IndianRupee, X, SortAsc, TrendingUp, ArrowUpDown, Heart, Sparkles, Loader2, Brain } from "lucide-react";
+import { Search, MapPin, Star, IndianRupee, X, SortAsc, TrendingUp, ArrowUpDown, Heart, Sparkles, Loader2, Brain, RefreshCw, Wand2 } from "lucide-react";
 import { useEffect } from "react";
 import { getAllDestinations } from "@/data/destinations";
 import { useToast } from "@/hooks/use-toast";
+import SafeImage from "@/components/SafeImage";
+import { getPexelsImage } from "@/lib/pexels";
+import { getDestinationFallbackImage } from "@/lib/imageFallbacks";
+import DestinationCardSkeleton from "@/components/DestinationCardSkeleton";
+import { prefetchImage } from "@/lib/prefetch";
 
 const filterTags = ["All", "Culture", "Beach", "Nature", "Adventure", "Romantic"];
 const sortOptions = [
@@ -24,6 +29,9 @@ const Explore = () => {
   });
   const [isGenerating, setIsGenerating] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showSkeletons, setShowSkeletons] = useState(true);
+  const [regeneratingImageId, setRegeneratingImageId] = useState<string | null>(null);
+  const [regeneratingSummaryId, setRegeneratingSummaryId] = useState<string | null>(null);
   const navigate = useNavigate();
   const searchRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -52,20 +60,62 @@ const Explore = () => {
       return 0;
     });
 
-  const fetchPexelsImage = async (query: string): Promise<string> => {
-    const pexelsKey = import.meta.env.VITE_PEXELS_API_KEY;
-    if (!pexelsKey) return "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=2074&auto=format&fit=crop";
+  const updateAiDestination = (id: string, updater: (dest: any) => any) => {
+    const existingAI = JSON.parse(localStorage.getItem("planzo_ai_destinations") || "[]");
+    const updated = existingAI.map((dest: any) => (dest.id === id ? updater(dest) : dest));
+    localStorage.setItem("planzo_ai_destinations", JSON.stringify(updated));
+    setRefreshKey((prev) => prev + 1);
+  };
 
+  const regenerateAiImage = async (dest: any) => {
+    if (!dest?.id || regeneratingImageId) return;
+    setRegeneratingImageId(dest.id);
     try {
-      const resp = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1`, {
-        headers: { Authorization: pexelsKey }
+      const nextImage = await getPexelsImage(`${dest.name} ${dest.state || ""}`, {
+        context: "destination",
+        destination: `${dest.name} ${dest.state || ""}`,
       });
-      if (!resp.ok) throw new Error("Pexels fetch failed");
+      updateAiDestination(dest.id, (current) => ({ ...current, image: nextImage }));
+      toast({ title: "Image refreshed", description: `${dest.name} image regenerated.` });
+    } catch {
+      toast({ title: "Image refresh failed", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setRegeneratingImageId(null);
+    }
+  };
+
+  const regenerateAiSummary = async (dest: any) => {
+    const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+    if (!dest?.id || !apiKey || regeneratingSummaryId) return;
+    setRegeneratingSummaryId(dest.id);
+    try {
+      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": window.location.origin,
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.0-flash-001",
+          messages: [
+            { role: "system", content: "Write a concise 2-sentence travel destination summary in JSON: {\"description\":\"...\"}." },
+            { role: "user", content: `Destination: ${dest.name}, ${dest.state}. Category: ${dest.category}. Keep it factual and useful.` },
+          ],
+          response_format: { type: "json_object" },
+        }),
+      });
+      if (!resp.ok) throw new Error("summary failed");
       const data = await resp.json();
-      return data.photos?.[0]?.src?.large || "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=2074&auto=format&fit=crop";
-    } catch (err) {
-      console.error("Pexels Error:", err);
-      return "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=2074&auto=format&fit=crop";
+      const parsed = JSON.parse(data.choices?.[0]?.message?.content || "{}");
+      const description = String(parsed.description || "").trim();
+      if (!description) throw new Error("empty summary");
+      updateAiDestination(dest.id, (current) => ({ ...current, description }));
+      toast({ title: "Summary refreshed", description: `${dest.name} summary updated.` });
+    } catch {
+      toast({ title: "Summary refresh failed", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setRegeneratingSummaryId(null);
     }
   };
 
@@ -99,7 +149,10 @@ const Explore = () => {
 
     try {
       // 1. Fetch real imagery from Pexels first or concurrent
-      const imageUrl = await fetchPexelsImage(searchQuery);
+      const imageUrl = await getPexelsImage(searchQuery, {
+        context: "destination",
+        destination: searchQuery,
+      });
 
       // 2. Fetch metadata from AI
       const resp = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
@@ -172,6 +225,11 @@ const Explore = () => {
       return () => clearTimeout(timer);
     }
   }, [searchQuery, filtered.length, isGenerating]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setShowSkeletons(false), 300);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <div className="px-5 md:container py-6">
@@ -314,19 +372,23 @@ const Explore = () => {
       </AnimatePresence>
 
       {/* Results */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-        {filtered.map((d, i) => (
+      <div key={refreshKey} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+        {showSkeletons
+          ? Array.from({ length: 6 }).map((_, i) => <DestinationCardSkeleton key={`explore-skeleton-${i}`} />)
+          : filtered.map((d, i) => (
           <motion.div
             key={d.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
+            onMouseEnter={() => prefetchImage(d.image)}
             onClick={() => navigate(`/destination/${d.id}`)}
             className="group bg-card rounded-2xl shadow-card overflow-hidden hover:shadow-elevated transition-shadow cursor-pointer"
           >
             <div className="relative h-40 overflow-hidden">
-              <img
+              <SafeImage
                 src={d.image}
+                fallbackSrc={getDestinationFallbackImage(d.name, d.category)}
                 alt={d.name}
                 className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                 loading="lazy"
@@ -337,6 +399,15 @@ const Explore = () => {
               <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-card/80 backdrop-blur text-foreground">
                 {d.category}
               </span>
+              {String(d.id).includes("-ai") ? (
+                <span className="absolute top-3 right-20 px-2 py-1 rounded-full text-[9px] font-bold bg-primary/80 text-primary-foreground backdrop-blur">
+                  AI generated
+                </span>
+              ) : (
+                <span className="absolute top-3 right-20 px-2 py-1 rounded-full text-[9px] font-bold bg-emerald-600/80 text-white backdrop-blur">
+                  Verified
+                </span>
+              )}
               {/* Wishlist button */}
               <button
                 onClick={(e) => toggleWishlist(e, String(d.id), d.name)}
@@ -370,6 +441,30 @@ const Explore = () => {
                 </span>
                 <span className="text-xs text-muted-foreground">{d.days} · Best: {d.bestTime}</span>
               </div>
+              {String(d.id).includes("-ai") && (
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void regenerateAiImage(d);
+                    }}
+                    disabled={regeneratingImageId === d.id}
+                    className="px-2.5 py-1.5 rounded-lg border border-border text-[10px] font-semibold text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                  >
+                    {regeneratingImageId === d.id ? <Loader2 className="h-3 w-3 inline animate-spin" /> : <RefreshCw className="h-3 w-3 inline" />} Image
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void regenerateAiSummary(d);
+                    }}
+                    disabled={regeneratingSummaryId === d.id}
+                    className="px-2.5 py-1.5 rounded-lg border border-border text-[10px] font-semibold text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                  >
+                    {regeneratingSummaryId === d.id ? <Loader2 className="h-3 w-3 inline animate-spin" /> : <Wand2 className="h-3 w-3 inline" />} Summary
+                  </button>
+                </div>
+              )}
             </div>
           </motion.div>
         ))}

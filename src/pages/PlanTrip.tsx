@@ -16,7 +16,7 @@ import Chatbot from "@/components/Chatbot";
 // import PlanSkeleton from "@/pages/PlanSkeleton";
 import TripPDF from "@/components/TripPDF";
 import type { LocalTransportOption, TripActivity, TripDay, TripPlan, TravelOption } from "@/types/trip-plan";
-import { getPexelsImage } from "@/lib/pexels";
+import { getPexelsImage, isFallbackOrMissing } from "@/lib/pexels";
 import InteractiveMap from "@/components/InteractiveMap";
 import ItineraryDisplay from "@/components/ItineraryDisplay";
 import { generateAlternativeActivity } from "@/lib/stream-ai";
@@ -107,6 +107,8 @@ const PlanTrip = () => {
   const [showMobileMap, setShowMobileMap] = useState(false);
   const [showTravelMode, setShowTravelMode] = useState(false);
   const [logisticsTab, setLogisticsTab] = useState<"all" | "flights" | "trains" | "buses">("all");
+  const [logisticsSortBy, setLogisticsSortBy] = useState<"recommended" | "price" | "duration" | "departure">("recommended");
+  const [pinnedLogistics, setPinnedLogistics] = useState<number[]>([]);
   const [packingChecked, setPackingChecked] = useState<Set<number>>(new Set());
   const [chatMessages, setChatMessages] = useState<Message[]>([
     { text: "Hello! I'm your AI trip assistant. Ask me anything about your plan.", isUser: false },
@@ -151,6 +153,40 @@ const PlanTrip = () => {
     if (tripId) {
       await supabase.from("saved_trips").update({ plan_data: updatedPlan as unknown as Json }).eq("id", tripId);
     }
+  };
+
+  const invokePlanTrip = async (payload: unknown) => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`;
+    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    // #region agent log
+    fetch('http://127.0.0.1:7664/ingest/a9dfbe62-6630-42d8-96e5-1ec8adee15ac',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c91d0'},body:JSON.stringify({sessionId:'1c91d0',runId:'pre-fix',hypothesisId:'H1',location:'PlanTrip.tsx:invokePlanTrip:entry',message:'invokePlanTrip called',data:{hasUrl:!!url,hasAnonKey:!!anonKey,anonKeyLength:anonKey?.length||0,payloadKeys:payload&&typeof payload==='object'?Object.keys(payload as Record<string, unknown>):[]},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": anonKey,
+        "Authorization": `Bearer ${anonKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    // #region agent log
+    fetch('http://127.0.0.1:7664/ingest/a9dfbe62-6630-42d8-96e5-1ec8adee15ac',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c91d0'},body:JSON.stringify({sessionId:'1c91d0',runId:'pre-fix',hypothesisId:'H2',location:'PlanTrip.tsx:invokePlanTrip:afterFetch',message:'plan-trip response received',data:{status:response.status,statusText:response.statusText,ok:response.ok},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      // #region agent log
+      fetch('http://127.0.0.1:7664/ingest/a9dfbe62-6630-42d8-96e5-1ec8adee15ac',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c91d0'},body:JSON.stringify({sessionId:'1c91d0',runId:'pre-fix',hypothesisId:'H3',location:'PlanTrip.tsx:invokePlanTrip:errorBody',message:'plan-trip non-2xx body',data:{error:errorData?.error||null,keys:errorData&&typeof errorData==='object'?Object.keys(errorData):[]},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      throw new Error(errorData.error || `Server error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    // #region agent log
+    fetch('http://127.0.0.1:7664/ingest/a9dfbe62-6630-42d8-96e5-1ec8adee15ac',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c91d0'},body:JSON.stringify({sessionId:'1c91d0',runId:'pre-fix',hypothesisId:'H4',location:'PlanTrip.tsx:invokePlanTrip:successBody',message:'plan-trip success body',data:{hasDestination:!!data?.destination,hasItinerary:Array.isArray(data?.itinerary),itineraryLength:Array.isArray(data?.itinerary)?data.itinerary.length:null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return data;
   };
 
   const { toast } = useToast();
@@ -207,6 +243,12 @@ const PlanTrip = () => {
       };
     }
   }, [tripId]);
+
+  useEffect(() => {
+    if (!tripId) return;
+    const title = plan?.destination || destination || "Trip";
+    localStorage.setItem("planzo_current_trip", JSON.stringify({ id: tripId, title }));
+  }, [tripId, plan?.destination, destination]);
   const isOwner = !tripId || (user && tripOwnerId === user.id);
   const isGuest = !user;
   const isViewer = user && tripOwnerId && tripOwnerId !== user.id;
@@ -326,39 +368,27 @@ const PlanTrip = () => {
     ]);
 
     try {
-      // Get the current session for a valid JWT token
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-          body: JSON.stringify({
-            query: destination,
-            budget,
-            days: days.toString(),
-            travelers: travelers.toString(),
-            mood: activeMood,
-            vibe,
-            userTravelStyle: user?.user_metadata?.travel_style || [],
-          }),
+      const responseData: TripPlan = await invokePlanTrip({
+        query: destination,
+        budget,
+        days: days.toString(),
+        travelers: travelers.toString(),
+        mood: activeMood,
+        vibe,
+        userTravelStyle: user?.user_metadata?.travel_style || [],
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server error: ${response.status}`);
+      if (isFallbackOrMissing(responseData.destinationImage)) {
+        responseData.destinationImage = await getPexelsImage(responseData.destination || destination, {
+          context: "destination",
+          destination: responseData.destination || destination,
+        });
       }
 
-      const data: TripPlan = await response.json();
-
       // Enrich images dynamically on the frontend to avoid duplicates
-      if (data.itinerary) {
-        data.itinerary = await Promise.all(
-          data.itinerary.map(async (day) => {
+      if (responseData.itinerary) {
+        responseData.itinerary = await Promise.all(
+          responseData.itinerary.map(async (day) => {
             let heroImage = day.heroImage;
             let enrichedActivities = day.activities;
 
@@ -367,7 +397,11 @@ const PlanTrip = () => {
                 day.activities.map(async (act) => {
                   if (typeof act !== 'string') {
                     const query = act.imageSearchQuery || act.place || act.name || "travel destination";
-                    const image = await getPexelsImage(query);
+                    const image = await getPexelsImage(query, {
+                      context: "activity",
+                      destination: responseData.destination || destination,
+                      dayTitle: day.title,
+                    });
                     if (!heroImage) heroImage = image; // Use first activity image as day banner fallback
                     return { ...act, image };
                   }
@@ -375,13 +409,19 @@ const PlanTrip = () => {
                 })
               );
             }
-            if (!heroImage) heroImage = await getPexelsImage(`${day.title} ${destination}`);
+            if (!heroImage || isFallbackOrMissing(heroImage)) {
+              heroImage = await getPexelsImage(`${day.title} ${destination}`, {
+                context: "day",
+                destination: responseData.destination || destination,
+                dayTitle: day.title,
+              });
+            }
             return { ...day, heroImage, activities: enrichedActivities };
           })
         );
       }
 
-      setPlan(data);
+      setPlan(responseData);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
       setError(errorMessage);
@@ -408,43 +448,28 @@ const PlanTrip = () => {
     setRegeneratingDay(dayIndex);
 
     try {
-      // Get the current session for a valid JWT token
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-          body: JSON.stringify({
-            existingPlan: plan,
-            dayToRegenerate: dayIndex,
-            query: destination,
-            budget,
-            days: days.toString(),
-            travelers: travelers.toString(),
-            mood: activeMood,
-            vibe,
-          }),
+      const responseDay: TripDay = await invokePlanTrip({
+        existingPlan: plan,
+        dayToRegenerate: dayIndex,
+        query: destination,
+        budget,
+        days: days.toString(),
+        travelers: travelers.toString(),
+        mood: activeMood,
+        vibe,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server error: ${response.status}`);
-      }
-
-      const data: TripDay = await response.json();
-
-      let heroImage = data.heroImage;
-      if (data.activities) {
-        data.activities = await Promise.all(
-          data.activities.map(async (act) => {
+      let heroImage = responseDay.heroImage;
+      if (responseDay.activities) {
+        responseDay.activities = await Promise.all(
+          responseDay.activities.map(async (act) => {
             if (typeof act !== 'string') {
               const query = act.imageSearchQuery || act.place || act.name || "travel destination";
-              const image = await getPexelsImage(query);
+              const image = await getPexelsImage(query, {
+                context: "activity",
+                destination: plan?.destination || destination,
+                dayTitle: responseDay.title,
+              });
               if (!heroImage) heroImage = image;
               return { ...act, image };
             }
@@ -452,15 +477,21 @@ const PlanTrip = () => {
           })
         );
       }
-      if (!heroImage) heroImage = await getPexelsImage(`${data.title} ${destination}`);
-      data.heroImage = heroImage;
+      if (!heroImage || isFallbackOrMissing(heroImage)) {
+        heroImage = await getPexelsImage(`${responseDay.title} ${destination}`, {
+          context: "day",
+          destination: plan?.destination || destination,
+          dayTitle: responseDay.title,
+        });
+      }
+      responseDay.heroImage = heroImage;
 
       setPlan((currentPlan) => {
         if (!currentPlan?.itinerary) return currentPlan;
         const newItinerary = [...currentPlan.itinerary];
         // The AI returns a day object, we replace the old one at the correct index.
-        data.day = dayIndex + 1; // Ensure day number is correct based on position
-        newItinerary[dayIndex] = data;
+        responseDay.day = dayIndex + 1; // Ensure day number is correct based on position
+        newItinerary[dayIndex] = responseDay;
 
         const updated = { ...currentPlan, itinerary: newItinerary };
         if (tripId) {
@@ -494,7 +525,10 @@ const PlanTrip = () => {
       const alt = await generateAlternativeActivity(plan.destination || destination, activeMood, oldActivityName);
       if (!alt) throw new Error("Could not generate alternative");
 
-      const image = await getPexelsImage(alt.imageSearchQuery || alt.place || alt.name);
+      const image = await getPexelsImage(alt.imageSearchQuery || alt.place || alt.name, {
+        context: "activity",
+        destination: plan.destination || destination,
+      });
 
       setPlan(prev => {
         if (!prev || !prev.itinerary) return prev;
@@ -673,6 +707,7 @@ const PlanTrip = () => {
       </div>
 
       {/* ── SEARCH CARD ── */}
+      {!plan && (
       <div className="relative z-30 px-4 md:px-6 max-w-4xl mx-auto -mt-36 pb-24">
         <motion.div
           initial={{ opacity: 0, y: 40 }}
@@ -951,46 +986,57 @@ const PlanTrip = () => {
           )}
         </AnimatePresence>
       </div>
+      )}
 
       {/* Generated Plan */}
       <AnimatePresence>
         {plan && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-8">
             {/* Header / Summary Card */}
-            <div className="p-0 rounded-[32px] bg-card shadow-elevated overflow-hidden border border-border/50 mb-8">
+            <div className="mb-8 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
               {plan.destinationImage && (
-                <div className="relative h-72 overflow-hidden">
-                  <img src={plan.destinationImage} alt={plan.destination} className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-card via-card/20 to-transparent" />
-                  <div className="absolute bottom-6 left-8 right-8">
-                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                <div className="relative h-72 md:h-80 overflow-hidden">
+                  <img src={plan.destinationImage} alt={plan.destination} className="h-full w-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/10" />
+                  <div className="absolute inset-x-0 bottom-0 p-5 md:p-7">
+                    <div className="flex flex-col gap-4">
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
                           {plan.weatherNote && (
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/20 backdrop-blur-md border border-white/30 text-white text-[10px] font-bold">
-                              <CloudSun className="h-3 w-3" />
+                            <div className="inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-medium text-white backdrop-blur">
+                              <CloudSun className="h-3.5 w-3.5" />
                               {(plan.weatherNote as string).split('.')[0]}
                             </div>
                           )}
                         </div>
-                        <h2 className="font-display font-black text-4xl text-white tracking-tight drop-shadow-md">{plan.destination}</h2>
-                        <div className="flex items-center gap-3 mt-3">
-                          <span className="px-3 py-1 rounded-full bg-primary/20 backdrop-blur-md border border-primary/30 text-primary-foreground text-[10px] font-bold uppercase tracking-widest">{activeMood} Adventure</span>
-                          <span className="px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-[10px] font-bold uppercase tracking-widest">{days} Days</span>
+                        <h2 className="font-display text-4xl md:text-5xl font-black leading-tight tracking-tight text-white drop-shadow-md">{plan.destination}</h2>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-white/25 bg-white/15 px-3 py-1 text-xs font-medium text-white">{activeMood}</span>
+                          <span className="rounded-full border border-white/25 bg-white/15 px-3 py-1 text-xs font-medium text-white">{days} days</span>
+                          <span className="rounded-full border border-white/25 bg-white/15 px-3 py-1 text-xs font-medium text-white">{travelers} travelers</span>
                           {plan.vibe && (
-                            <span className="px-3 py-1 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-500/30 text-blue-200 text-[10px] font-bold uppercase tracking-widest">{String(plan.vibe)}</span>
+                            <span className="rounded-full border border-white/25 bg-white/15 px-3 py-1 text-xs font-medium text-white">{String(plan.vibe)}</span>
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button onClick={handleShareTrip} className="p-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 text-white transition-colors shadow-sm"><Share2 className="h-5 w-5" /></button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => setPlan(null)}
+                          className="inline-flex h-10 items-center gap-2 rounded-lg border border-white/25 bg-white/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/20"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          New search
+                        </button>
+                        <button onClick={handleShareTrip} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white transition-colors hover:bg-white/20">
+                          <Share2 className="h-4 w-4" />
+                        </button>
                         <button
                           onClick={isOwner ? handleSaveTrip : isGuest ? () => navigate("/auth") : handleSaveTrip}
                           disabled={saving}
-                          className="px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow-lg hover:opacity-90 transition-all flex items-center gap-2"
+                          className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                          {saving ? "Processing..." : isOwner ? (tripId ? "Update Plan" : "Save Trip") : isGuest ? "Sign Up to Save" : "Duplicate to My Trips"}
+                          {saving ? "Processing..." : isOwner ? (tripId ? "Update plan" : "Save trip") : isGuest ? "Sign up to save" : "Duplicate trip"}
                         </button>
                       </div>
                     </div>
@@ -999,25 +1045,41 @@ const PlanTrip = () => {
               )}
 
               {!plan.destinationImage && (
-                <div className="p-8 border-b border-border/50">
-                  <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                    <h2 className="font-display font-black text-3xl text-slate-800 dark:text-slate-100 tracking-tight">{plan.destination}</h2>
-                    <div className="flex gap-2">
-                      <button onClick={handleShareTrip} className="p-3 rounded-2xl bg-card border border-border hover:bg-muted transition-colors shadow-sm"><Share2 className="h-4 w-4 text-slate-800 dark:text-slate-100" /></button>
-                      <button onClick={handleSaveTrip} disabled={saving} className="px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow-lg flex items-center gap-2">
-                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
+                <div className="border-b border-border p-6 md:p-7">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="space-y-2">
+                      <h2 className="font-display text-3xl font-black tracking-tight text-slate-800 dark:text-slate-100">{plan.destination}</h2>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-foreground">{activeMood}</span>
+                        <span className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-foreground">{days} days</span>
+                        <span className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-foreground">{travelers} travelers</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setPlan(null)}
+                        className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-slate-800 transition-colors hover:bg-muted dark:text-slate-100"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        New search
+                      </button>
+                      <button onClick={handleShareTrip} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-slate-800 transition-colors hover:bg-muted dark:text-slate-100">
+                        <Share2 className="h-4 w-4" />
+                      </button>
+                      <button onClick={handleSaveTrip} disabled={saving} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:brightness-110 disabled:opacity-60">
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save trip
                       </button>
                     </div>
                   </div>
                 </div>
               )}
 
-              <div className="p-8 pt-6">
-                <p className="text-muted-foreground leading-relaxed text-sm md:text-base max-w-2xl">{plan.summary}</p>
-                <div className="flex flex-wrap gap-4 mt-6">
-                  {startDate && <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20 text-xs font-bold whitespace-nowrap"><Calendar className="h-3.5 w-3.5 flex-shrink-0" /> Starts {new Date(startDate).toLocaleDateString()}</div>}
-                  <div className="flex items-center gap-2 px-4 py-2 bg-primary/5 text-primary rounded-xl border border-primary/20 text-xs font-bold whitespace-nowrap"><Users className="h-3.5 w-3.5 flex-shrink-0" /> {travelers} Travelers</div>
-                  <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/5 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-500/20 text-xs font-bold whitespace-nowrap"><IndianRupee className="h-3.5 w-3.5 flex-shrink-0" /> Budget: ₹{parseInt(budget).toLocaleString()}</div>
+              <div className="p-6 md:p-7">
+                <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground md:text-base">{plan.summary}</p>
+                <div className="mt-5 flex flex-wrap gap-2.5">
+                  {startDate && <div className="inline-flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs font-medium text-foreground"><Calendar className="h-3.5 w-3.5 flex-shrink-0" /> Starts {new Date(startDate).toLocaleDateString()}</div>}
+                  <div className="inline-flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs font-medium text-foreground"><Users className="h-3.5 w-3.5 flex-shrink-0" /> {travelers} travelers</div>
+                  <div className="inline-flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs font-medium text-foreground"><IndianRupee className="h-3.5 w-3.5 flex-shrink-0" /> Budget ₹{parseInt(budget).toLocaleString()}</div>
                 </div>
               </div>
             </div>
@@ -1191,14 +1253,88 @@ const PlanTrip = () => {
 
                   case 'logistics':
                     {
-                      const flights = plan.travelOptions?.filter((o: any) => o.mode?.toLowerCase().includes('flight')) || [];
-                      const trains = plan.travelOptions?.filter((o: any) => o.mode?.toLowerCase().includes('train')) || [];
-                      const buses = plan.travelOptions?.filter((o: any) => o.mode?.toLowerCase().includes('bus')) || [];
+                      const getNormalizedMode = (opt: any): "flight" | "train" | "bus" => {
+                        const rawMode = String(opt?.mode || "").toLowerCase();
+                        const rawOperator = String(opt?.operator || "").toLowerCase();
+                        const rawType = String(opt?.type || "").toLowerCase();
+                        const hint = `${rawMode} ${rawOperator} ${rawType}`;
+                        if (/(indigo|air india|vistara|spicejet|akasa|airasia|flight|airline|airport)/.test(hint)) return "flight";
+                        if (/(train|rail|irctc|rajdhani|shatabdi|vande bharat)/.test(hint)) return "train";
+                        return "bus";
+                      };
+
+                      const normalizedOptions = (plan.travelOptions || []).map((o: any, idx: number) => ({
+                        ...o,
+                        __idx: idx,
+                        __normalizedMode: getNormalizedMode(o),
+                      }));
+
+                      const flights = normalizedOptions.filter((o: any) => o.__normalizedMode === 'flight');
+                      const trains = normalizedOptions.filter((o: any) => o.__normalizedMode === 'train');
+                      const buses = normalizedOptions.filter((o: any) => o.__normalizedMode === 'bus');
 
                       const filteredOptions = logisticsTab === "flights" ? flights
                         : logisticsTab === "trains" ? trains
                         : logisticsTab === "buses" ? buses
-                        : plan.travelOptions || [];
+                        : normalizedOptions;
+
+                      const parseDurationMinutes = (duration?: string) => {
+                        if (!duration) return Number.POSITIVE_INFINITY;
+                        const h = duration.match(/(\d+)\s*h/i);
+                        const m = duration.match(/(\d+)\s*m/i);
+                        const hours = h ? Number(h[1]) : 0;
+                        const mins = m ? Number(m[1]) : 0;
+                        return hours * 60 + mins;
+                      };
+
+                      const parseDepartureMinutes = (time?: string) => {
+                        if (!time) return Number.POSITIVE_INFINITY;
+                        const parts = time.match(/(\d{1,2}):(\d{2})/);
+                        if (!parts) return Number.POSITIVE_INFINITY;
+                        return Number(parts[1]) * 60 + Number(parts[2]);
+                      };
+
+                      const sortedOptions = [...filteredOptions].sort((a: any, b: any) => {
+                        if (logisticsSortBy === "price") {
+                          const ap = a.price ?? a.estimatedCost ?? Number.POSITIVE_INFINITY;
+                          const bp = b.price ?? b.estimatedCost ?? Number.POSITIVE_INFINITY;
+                          return ap - bp;
+                        }
+                        if (logisticsSortBy === "duration") {
+                          return parseDurationMinutes(a.duration) - parseDurationMinutes(b.duration);
+                        }
+                        if (logisticsSortBy === "departure") {
+                          return parseDepartureMinutes(a.departureTime) - parseDepartureMinutes(b.departureTime);
+                        }
+                        const aRecommended = a.isRecommended ? 1 : 0;
+                        const bRecommended = b.isRecommended ? 1 : 0;
+                        if (aRecommended !== bRecommended) return bRecommended - aRecommended;
+                        const ap = a.price ?? a.estimatedCost ?? Number.POSITIVE_INFINITY;
+                        const bp = b.price ?? b.estimatedCost ?? Number.POSITIVE_INFINITY;
+                        return ap - bp;
+                      });
+
+                      const allOptions = normalizedOptions;
+                      const cheapestOption = allOptions.length
+                        ? [...allOptions].sort((a: any, b: any) => (a.price ?? a.estimatedCost ?? Number.POSITIVE_INFINITY) - (b.price ?? b.estimatedCost ?? Number.POSITIVE_INFINITY))[0]
+                        : null;
+                      const fastestOption = allOptions.length
+                        ? [...allOptions].sort((a: any, b: any) => parseDurationMinutes(a.duration) - parseDurationMinutes(b.duration))[0]
+                        : null;
+                      const bestOverallOption = allOptions.find((o: any) => o.isRecommended) || cheapestOption || fastestOption;
+
+                      const recommendationCardsRaw = [
+                        { id: "cheapest", label: "Cheapest", option: cheapestOption, icon: IndianRupee, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+                        { id: "fastest", label: "Fastest", option: fastestOption, icon: Zap, color: "text-blue-500", bg: "bg-blue-500/10" },
+                        { id: "best", label: "Best Overall", option: bestOverallOption, icon: Star, color: "text-purple-500", bg: "bg-purple-500/10" },
+                      ].filter((item) => !!item.option);
+                      const seen = new Set<number>();
+                      const recommendationCards = recommendationCardsRaw.filter((item: any) => {
+                        const key = Number(item.option?.__idx ?? -1);
+                        if (seen.has(key)) return false;
+                        seen.add(key);
+                        return true;
+                      });
 
                       const allPrices = (plan.travelOptions || []).map((o: any) => o.price ?? o.estimatedCost ?? 0).filter((p: number) => p > 0);
                       const cheapestPrice = allPrices.length > 0 ? Math.min(...allPrices) : null;
@@ -1207,17 +1343,27 @@ const PlanTrip = () => {
                         return acc ? acc : o.duration;
                       }, null);
 
-                      const getModeConfig = (mode?: string) => {
-                        const m = mode?.toLowerCase() || '';
+                      const getModeConfig = (mode?: string, normalizedMode?: string) => {
+                        const m = normalizedMode || mode?.toLowerCase() || '';
                         if (m.includes('flight')) return { Icon: Plane, color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', label: 'FLIGHT', btnClass: 'from-blue-600 to-blue-500' };
                         if (m.includes('train')) return { Icon: Train, color: '#10b981', bg: 'rgba(16,185,129,0.12)', label: 'TRAIN', btnClass: 'from-emerald-600 to-emerald-500' };
                         return { Icon: Bus, color: '#f97316', bg: 'rgba(249,115,22,0.12)', label: 'BUS', btnClass: 'from-orange-600 to-orange-500' };
                       };
 
                       const generateDeepLink = (opt: any) => {
-                        if (opt.bookingUrl && opt.bookingUrl.startsWith('http')) return opt.bookingUrl;
+                        const normalizedMode = opt.__normalizedMode || getNormalizedMode(opt);
+                        const bookingUrl = String(opt.bookingUrl || "");
+                        if (bookingUrl.startsWith("http")) {
+                          const lowerUrl = bookingUrl.toLowerCase();
+                          const isFlightLink = /(indigo|airindia|spicejet|makemytrip.*flight|cleartrip|skyscanner|goibibo)/.test(lowerUrl);
+                          const isRailLink = /(irctc|rail|train|makemytrip.*rail)/.test(lowerUrl);
+                          const isBusLink = /(redbus|abhibus|bus)/.test(lowerUrl);
+                          if ((normalizedMode === "flight" && isFlightLink) || (normalizedMode === "train" && isRailLink) || (normalizedMode === "bus" && isBusLink)) {
+                            return bookingUrl;
+                          }
+                        }
                         
-                        const m = opt.mode?.toLowerCase() || '';
+                        const m = normalizedMode;
                         const toDest = (opt.to || plan.destination || '').split(',')[0].trim().toLowerCase();
                         const dateObj = startDate ? new Date(startDate) : new Date();
                         const yymm = dateObj.toISOString().substring(2, 7).replace('-', '');
@@ -1268,6 +1414,37 @@ const PlanTrip = () => {
                             </div>
                           </div>
 
+                          {/* Decision strip */}
+                          {recommendationCards.length > 0 && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              {recommendationCards.map((rec) => {
+                                const Icon = rec.icon;
+                                const option: any = rec.option;
+                                const price = option?.price ?? option?.estimatedCost;
+                                return (
+                                  <button
+                                    key={rec.id}
+                                    onClick={() => window.open(generateDeepLink(option), "_blank")}
+                                    className="p-4 rounded-2xl border border-border/60 bg-card hover:shadow-card transition-all text-left"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div className={`h-8 w-8 rounded-xl ${rec.bg} flex items-center justify-center`}>
+                                        <Icon className={`h-4 w-4 ${rec.color}`} />
+                                      </div>
+                                      <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{rec.label}</span>
+                                    </div>
+                                    <p className="mt-3 text-sm font-black text-slate-800 dark:text-slate-100">{option?.mode || "Option"}</p>
+                                    <p className="text-xs text-muted-foreground">{option?.from || "From"} → {option?.to || "To"}</p>
+                                    <div className="mt-2 flex items-center justify-between">
+                                      <span className="text-xs font-bold text-muted-foreground">{option?.duration || "Duration N/A"}</span>
+                                      <span className="text-sm font-black text-primary">{price ? `₹${price.toLocaleString()}` : "—"}</span>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
                           {/* Filter Tabs */}
                           <div className="flex items-center gap-1.5 p-1.5 bg-muted/40 backdrop-blur-md rounded-2xl border border-border/50 w-fit">
                             {([
@@ -1288,8 +1465,30 @@ const PlanTrip = () => {
                             ))}
                           </div>
 
+                          {/* Sort row */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            {[
+                              { id: "recommended", label: "Recommended" },
+                              { id: "price", label: "Price" },
+                              { id: "duration", label: "Duration" },
+                              { id: "departure", label: "Departure" },
+                            ].map((sort) => (
+                              <button
+                                key={sort.id}
+                                onClick={() => setLogisticsSortBy(sort.id as typeof logisticsSortBy)}
+                                className={`px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                  logisticsSortBy === sort.id
+                                    ? "bg-card text-slate-800 dark:text-slate-100 shadow-card border border-border/50"
+                                    : "bg-muted/40 text-muted-foreground hover:text-slate-800 dark:hover:text-slate-100"
+                                }`}
+                              >
+                                {sort.label}
+                              </button>
+                            ))}
+                          </div>
+
                           {/* Empty State */}
-                          {filteredOptions.length === 0 && (
+                          {sortedOptions.length === 0 && (
                             <div className="py-16 text-center rounded-[32px] border border-dashed border-border/30 bg-card">
                               <div className="h-14 w-14 rounded-full bg-muted/30 mx-auto flex items-center justify-center mb-4">
                                 <AlertTriangle className="h-7 w-7 text-muted-foreground" />
@@ -1301,11 +1500,13 @@ const PlanTrip = () => {
 
                           {/* BOARDING PASS CARDS */}
                           <div className="space-y-5">
-                            {filteredOptions.map((opt: any, i: number) => {
-                              const { Icon, color, bg, label, btnClass } = getModeConfig(opt.mode);
+                            {sortedOptions.map((opt: any, i: number) => {
+                              const { Icon, color, bg, label, btnClass } = getModeConfig(opt.mode, opt.__normalizedMode);
                               const price = opt.price ?? opt.estimatedCost;
                               const operatorName = opt.operator || opt.mode || 'Operator';
                               const isRecommended = opt.isRecommended || i === 0;
+                              const optionKey = Number((opt as any).id ?? i);
+                              const isPinned = pinnedLogistics.includes(optionKey);
 
                               return (
                                 <motion.div
@@ -1328,7 +1529,7 @@ const PlanTrip = () => {
                                           <Icon className="h-5 w-5" style={{ color }} />
                                         </div>
                                         <div>
-                                          <p className="text-sm font-black text-slate-800 dark:text-slate-100 leading-tight tracking-tight">{operatorName}</p>
+                                        <p className="text-sm font-black text-slate-800 dark:text-slate-100 leading-tight tracking-tight">{operatorName}</p>
                                           <div className="flex items-center gap-1.5 mt-0.5">
                                             <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md" style={{ background: bg, color }}>
                                               {label}
@@ -1412,12 +1613,47 @@ const PlanTrip = () => {
                                       >
                                         Select {label} <ChevronRight className="h-3.5 w-3.5" />
                                       </button>
+                                      <button
+                                        onClick={() =>
+                                          setPinnedLogistics((prev) =>
+                                            isPinned ? prev.filter((id) => id !== optionKey) : [...prev, optionKey].slice(-3)
+                                          )
+                                        }
+                                        className="w-full mt-2 py-2 rounded-xl border border-border text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground hover:text-slate-800 dark:hover:text-slate-100 transition-colors"
+                                      >
+                                        {isPinned ? "Unpin from Compare" : "Pin to Compare"}
+                                      </button>
                                     </div>
                                   </div>
                                 </motion.div>
                               );
                             })}
                           </div>
+
+                          {/* Compare tray */}
+                          {pinnedLogistics.length > 0 && (
+                            <div className="rounded-2xl border border-border/60 bg-card p-4">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3">Pinned for Comparison</p>
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                {sortedOptions
+                                  .filter((opt: any, i: number) => pinnedLogistics.includes(Number((opt as any).id ?? i)))
+                                  .slice(0, 3)
+                                  .map((opt: any, i: number) => {
+                                    const price = opt.price ?? opt.estimatedCost;
+                                    return (
+                                      <div key={`compare-${i}`} className="rounded-xl bg-muted/30 border border-border/40 p-3">
+                                        <p className="text-xs font-black text-slate-800 dark:text-slate-100">{opt.mode || "Option"}</p>
+                                        <p className="text-[10px] text-muted-foreground mt-1">{opt.from || "From"} → {opt.to || "To"}</p>
+                                        <div className="mt-2 flex items-center justify-between text-xs font-bold">
+                                          <span>{opt.duration || "N/A"}</span>
+                                          <span className="text-primary">{price ? `₹${price.toLocaleString()}` : "—"}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            </div>
+                          )}
 
                           {/* ON-GROUND MOBILITY */}
                           {plan.localTransport && plan.localTransport.length > 0 && (

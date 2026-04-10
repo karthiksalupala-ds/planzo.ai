@@ -33,13 +33,18 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 // Mock Supabase
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    auth: {
-      signInWithOAuth: vi.fn(),
+vi.mock("@/integrations/supabase/client", () => {
+  const mock = {
+    hasSupabaseConfig: true,
+    supabaseConfigError: null,
+    supabase: {
+      auth: {
+        signInWithOAuth: vi.fn(),
+      },
     },
-  },
-}));
+  };
+  return mock;
+});
 
 describe("Auth Page Buttons Verification", () => {
   beforeEach(() => {
@@ -74,7 +79,7 @@ describe("Auth Page Buttons Verification", () => {
     fireEvent.change(screen.getByPlaceholderText("Email address"), { target: { value: "test@test.com" } });
     fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "password123" } });
     
-    const submitBtn = screen.getByRole("button", { name: /Sign In/i });
+    const submitBtn = screen.getByRole("button", { name: /^Sign In$/ });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -100,7 +105,7 @@ describe("Auth Page Buttons Verification", () => {
     fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "password123" } });
     fireEvent.change(screen.getByPlaceholderText("Display name"), { target: { value: "New User" } });
 
-    const submitBtn = screen.getByRole("button", { name: /Create Account/i });
+    const submitBtn = screen.getByRole("button", { name: /^Create Account$/ });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {

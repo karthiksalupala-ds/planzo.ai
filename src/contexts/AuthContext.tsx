@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { hasSupabaseConfig, supabase, supabaseConfigError } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 
 interface AuthContextType {
@@ -19,14 +19,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for mock user first
+    // Only allow mock user when Supabase is not configured.
     const mockUser = localStorage.getItem("planzo_mock_user");
-    if (mockUser) {
+    if (mockUser && !hasSupabaseConfig) {
       const parsed = JSON.parse(mockUser);
       setUser(parsed);
       setSession({ user: parsed, access_token: "mock-token", refresh_token: "mock-refresh", expires_in: 3600, token_type: "bearer" } as Session);
       setLoading(false);
       return;
+    }
+    if (mockUser && hasSupabaseConfig) {
+      localStorage.removeItem("planzo_mock_user");
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -48,23 +51,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signUp = async (email: string, password: string, displayName?: string) => {
-    // Mock Signup
-    if (email === "test@planzo.ai") return signIn(email, password);
+    const normalizedEmail = email.trim().toLowerCase();
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: { display_name: displayName || "Traveler" },
-      },
-    });
-    return { error: error?.message ?? null };
+    // Mock Signup
+    if (normalizedEmail === "test@planzo.ai") return signIn(normalizedEmail, password);
+
+    if (!hasSupabaseConfig) return { error: supabaseConfigError };
+
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: { display_name: displayName || "Traveler" },
+        },
+      });
+      return { error: error?.message ?? null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Sign up failed. Please check your network and Supabase configuration." };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    // Mock Login Bypass
-    if (email === "test@planzo.ai" && password === "password") {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Mock Login Bypass only when cloud auth is unavailable.
+    if (!hasSupabaseConfig && normalizedEmail === "test@planzo.ai" && password === "password") {
       const mockUser = {
         id: "mock-user-123",
         email: "test@planzo.ai",
@@ -80,8 +93,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { error: null };
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    if (!hasSupabaseConfig) return { error: supabaseConfigError };
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+      return { error: error?.message ?? null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Sign in failed. Please check your network and Supabase configuration." };
+    }
   };
 
   const signOut = async () => {
