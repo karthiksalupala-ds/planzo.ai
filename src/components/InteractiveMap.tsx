@@ -23,10 +23,15 @@ const premiumMapStyles = [
 ];
 
 const libraries: ("places")[] = ["places"];
+const MAX_DIRECTIONS_WAYPOINTS = 23;
+
+const isValidCoordinate = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
   const [selectedPoint, setSelectedPoint] = useState<any>(null);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [directionsNotice, setDirectionsNotice] = useState<string | null>(null);
   const [travelMode, setTravelMode] = useState<google.maps.TravelMode>(window.google?.maps.TravelMode.DRIVING || 'DRIVING' as any);
   
   const { isLoaded, loadError } = useJsApiLoader({
@@ -36,11 +41,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
   });
 
   const points = useMemo(() => {
-    const validPoints: { lat: number, lng: number, title: string, day: number, place: string }[] = [];
+    const activityPoints: { lat: number, lng: number, title: string, day: number, place: string }[] = [];
+
     plan.itinerary?.forEach((day: TripDay) => {
       day.activities?.forEach((act: TripActivity | string) => {
-        if (typeof act !== 'string' && act.lat && act.lng) {
-          validPoints.push({
+        if (
+          typeof act !== 'string' &&
+          isValidCoordinate(act.lat) &&
+          isValidCoordinate(act.lng)
+        ) {
+          activityPoints.push({
             lat: act.lat,
             lng: act.lng,
             title: act.name || 'Activity',
@@ -50,36 +60,65 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
         }
       });
     });
-    return validPoints;
+
+    if (activityPoints.length > 0) return activityPoints;
+
+    if (isValidCoordinate(plan.map?.lat) && isValidCoordinate(plan.map?.lng)) {
+      return [{
+        lat: plan.map.lat,
+        lng: plan.map.lng,
+        title: plan.destination || 'Destination',
+        day: 1,
+        place: 'Center'
+      }];
+    }
+
+    return [];
   }, [plan]);
 
   useEffect(() => {
-    if (isLoaded && points.length > 1) {
-      const directionsService = new google.maps.DirectionsService();
-      
-      const origin = points[0];
-      const destination = points[points.length - 1];
-      const waypoints = points.slice(1, -1).map(p => ({
-        location: { lat: p.lat, lng: p.lng },
-        stopover: true
-      }));
+    if (!isLoaded) return;
 
-      directionsService.route(
-        {
-          origin: { lat: origin.lat, lng: origin.lng },
-          destination: { lat: destination.lat, lng: destination.lng },
-          waypoints: waypoints,
-          travelMode: travelMode,
-        },
-        (result, status) => {
-          if (status === google.maps.DirectionsStatus.OK) {
-            setDirections(result);
-          } else {
-            console.error(`Directions request failed: ${status}`);
-          }
-        }
-      );
+    if (points.length <= 1) {
+      setDirections(null);
+      setDirectionsNotice(null);
+      return;
     }
+
+    const waypointCount = points.length - 2;
+    if (waypointCount > MAX_DIRECTIONS_WAYPOINTS) {
+      setDirections(null);
+      setDirectionsNotice(`Showing markers only: this route has ${points.length} stops, which exceeds the map routing limit.`);
+      return;
+    }
+
+    const directionsService = new google.maps.DirectionsService();
+    const origin = points[0];
+    const destination = points[points.length - 1];
+    const waypoints = points.slice(1, -1).map((p) => ({
+      location: { lat: p.lat, lng: p.lng },
+      stopover: true
+    }));
+
+    directionsService.route(
+      {
+        origin: { lat: origin.lat, lng: origin.lng },
+        destination: { lat: destination.lat, lng: destination.lng },
+        waypoints,
+        travelMode,
+      },
+      (result, status) => {
+        if (status === google.maps.DirectionsStatus.OK && result) {
+          setDirections(result);
+          setDirectionsNotice(null);
+          return;
+        }
+
+        setDirections(null);
+        setDirectionsNotice('Could not calculate a full route right now. Showing markers instead.');
+        console.error(`Directions request failed: ${status}`);
+      }
+    );
   }, [isLoaded, points, travelMode]);
 
   const onSelect = useCallback((point: any) => {
@@ -152,6 +191,14 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
           ))}
         </div>
       </div>
+
+      {directionsNotice && (
+        <div className="absolute top-24 left-4 right-4 z-[10] pointer-events-none">
+          <div className="bg-amber-50/95 dark:bg-amber-950/80 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-[11px] font-medium px-3 py-2 rounded-xl shadow-sm">
+            {directionsNotice}
+          </div>
+        </div>
+      )}
 
       <GoogleMap
         mapContainerStyle={mapContainerStyle}
