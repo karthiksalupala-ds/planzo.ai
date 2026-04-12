@@ -15,6 +15,7 @@ type ProfileRow = Tables<"profiles">;
 type SavedTripRow = Tables<"saved_trips">;
 
 const availableTravelStyles = ["Adventure", "Budget", "Luxury", "Food Lover", "Culture", "Relaxing", "Nature", "Backpacker"];
+type ProfileTab = "trips" | "wishlist" | "stats";
 
 const Profile = () => {
   const { user, loading, signOut } = useAuth();
@@ -260,7 +261,7 @@ const Profile = () => {
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as ProfileTab)}
               className={`whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
                 activeTab === tab.id 
                   ? "bg-foreground text-background" 

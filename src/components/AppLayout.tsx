@@ -28,7 +28,7 @@ const AppLayout = () => {
   return (
     <div className="min-h-screen bg-background">
       <DesktopNav />
-      <main className="pb-20 md:pb-0 md:pt-16">
+      <main className="pb-24 md:pb-0 md:pt-16" style={{ paddingBottom: "max(6rem, env(safe-area-inset-bottom))" }}>
         <Outlet />
       </main>
       {currentTrip && !location.pathname.includes("/plan") && (

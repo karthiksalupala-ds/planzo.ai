@@ -4,13 +4,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft, Plus, Trash2, Hotel, Utensils, Camera, MapPin, ShoppingBag, MoreHorizontal,
-  Loader2, TrendingUp, Sparkles, IndianRupee, PieChart
+  Loader2, TrendingUp, Sparkles, IndianRupee, PieChart, Users, ArrowRightLeft, ThumbsUp, ThumbsDown, CheckCircle2
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 import type { ExpenseCoaching, TripPlan } from "@/types/trip-plan";
+import { toActorName, toVoterKey, type TripCollaborator, type TripExpenseSplit, type TripVote } from "@/lib/trip-features";
 
 type SavedTripRow = Tables<"saved_trips">;
 type TripExpenseRow = Tables<"trip_expenses">;
@@ -36,6 +37,9 @@ const TripExpenses = () => {
 
   const [trip, setTrip] = useState<SavedTripWithPlan | null>(null);
   const [expenses, setExpenses] = useState<TripExpenseRow[]>([]);
+  const [collaborators, setCollaborators] = useState<TripCollaborator[]>([]);
+  const [splits, setSplits] = useState<TripExpenseSplit[]>([]);
+  const [expenseVotes, setExpenseVotes] = useState<TripVote[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [coaching, setCoaching] = useState<ExpenseCoaching | null>(null);
@@ -49,7 +53,13 @@ const TripExpenses = () => {
   const [newAmount, setNewAmount] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0]);
+  const [payerName, setPayerName] = useState("");
   const [adding, setAdding] = useState(false);
+  const actorName = toActorName(
+    (user?.user_metadata?.display_name as string | undefined) || user?.email?.split("@")[0],
+    user?.email
+  );
+  const actorKey = toVoterKey(user?.id, actorName, user?.email);
 
   const buildFallbackCoaching = (
     title: string,
@@ -106,6 +116,10 @@ const TripExpenses = () => {
   };
 
   useEffect(() => {
+    setPayerName(actorName);
+  }, [actorName]);
+
+  useEffect(() => {
     if (!user) {
       navigate("/auth");
       return;
@@ -113,9 +127,12 @@ const TripExpenses = () => {
 
     const loadData = async () => {
       setLoading(true);
-      const [tripRes, expRes] = await Promise.all([
+      const [tripRes, expRes, collaboratorsRes, splitsRes, votesRes] = await Promise.all([
         supabase.from("saved_trips").select("*").eq("id", tripId).maybeSingle(),
         supabase.from("trip_expenses").select("*").eq("trip_id", tripId).order("expense_date", { ascending: false }),
+        supabase.from("trip_collaborators").select("*").eq("trip_id", tripId).order("created_at", { ascending: true }),
+        supabase.from("trip_expense_splits").select("*").eq("trip_id", tripId).order("created_at", { ascending: false }),
+        supabase.from("trip_votes").select("*").eq("trip_id", tripId).eq("subject_type", "expense").order("created_at", { ascending: false }),
       ]);
 
       if (tripRes.data) {
@@ -127,6 +144,18 @@ const TripExpenses = () => {
 
       if (expRes.data) {
         setExpenses(expRes.data);
+      }
+
+      if (collaboratorsRes.data) {
+        setCollaborators(collaboratorsRes.data);
+      }
+
+      if (splitsRes.data) {
+        setSplits(splitsRes.data);
+      }
+
+      if (votesRes.data) {
+        setExpenseVotes(votesRes.data);
       }
 
       setLoading(false);
@@ -143,6 +172,29 @@ const TripExpenses = () => {
     } catch {
       setSoftCaps({});
     }
+  }, [tripId]);
+
+  useEffect(() => {
+    if (!tripId) return;
+
+    const channel = supabase.channel(`trip-expense-social-${tripId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_expenses", filter: `trip_id=eq.${tripId}` }, async () => {
+        const { data } = await supabase.from("trip_expenses").select("*").eq("trip_id", tripId).order("expense_date", { ascending: false });
+        if (data) setExpenses(data);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_expense_splits", filter: `trip_id=eq.${tripId}` }, async () => {
+        const { data } = await supabase.from("trip_expense_splits").select("*").eq("trip_id", tripId).order("created_at", { ascending: false });
+        if (data) setSplits(data);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_votes", filter: `trip_id=eq.${tripId}` }, async () => {
+        const { data } = await supabase.from("trip_votes").select("*").eq("trip_id", tripId).eq("subject_type", "expense").order("created_at", { ascending: false });
+        if (data) setExpenseVotes(data);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [tripId]);
 
   const setCategorySoftCap = (category: string, amount: number) => {
@@ -163,6 +215,7 @@ const TripExpenses = () => {
       amount: parseFloat(newAmount),
       description: newDesc || undefined,
       expense_date: newDate,
+      payer_name: payerName || actorName,
     }).select().single();
     setAdding(false);
     if (error) {
@@ -177,6 +230,69 @@ const TripExpenses = () => {
   const deleteExpense = async (id: string) => {
     await supabase.from("trip_expenses").delete().eq("id", id);
     setExpenses((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  const createEqualSplit = async (expense: TripExpenseRow) => {
+    if (!tripId) return;
+    const participants = collaborators.length
+      ? collaborators.map((member) => ({ name: member.display_name, email: member.email }))
+      : [{ name: expense.payer_name || actorName, email: user?.email || null }];
+
+    if (!participants.length) return;
+
+    await supabase.from("trip_expense_splits").delete().eq("expense_id", expense.id);
+    const splitAmount = Number(expense.amount) / participants.length;
+    const payload = participants.map((member, index) => ({
+      trip_id: tripId,
+      expense_id: expense.id,
+      member_name: member.name,
+      member_email: member.email || null,
+      amount_owed: Number((index === participants.length - 1
+        ? Number(expense.amount) - splitAmount * (participants.length - 1)
+        : splitAmount).toFixed(2)),
+      settled: false,
+    }));
+
+    const { error } = await supabase.from("trip_expense_splits").insert(payload);
+    if (error) {
+      toast({ title: "Split failed", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    const { data } = await supabase.from("trip_expense_splits").select("*").eq("trip_id", tripId).order("created_at", { ascending: false });
+    if (data) setSplits(data);
+    toast({ title: "Split created", description: `${expense.description || categoryConfig[expense.category]?.label || "Expense"} was split equally.` });
+  };
+
+  const toggleSplitSettlement = async (splitId: string, nextSettled: boolean) => {
+    const { error } = await supabase.from("trip_expense_splits").update({ settled: nextSettled }).eq("id", splitId);
+    if (error) {
+      toast({ title: "Settlement update failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    setSplits((prev) => prev.map((split) => split.id === splitId ? { ...split, settled: nextSettled } : split));
+  };
+
+  const voteOnExpense = async (expense: TripExpenseRow, voteValue: 1 | -1) => {
+    if (!tripId) return;
+    const { error } = await supabase.from("trip_votes").upsert({
+      trip_id: tripId,
+      subject_type: "expense",
+      subject_key: expense.id,
+      subject_label: expense.description || categoryConfig[expense.category]?.label || "Expense",
+      voter_key: actorKey,
+      voter_name: actorName,
+      user_id: user?.id || null,
+      vote_value: voteValue,
+    }, { onConflict: "trip_id,subject_type,subject_key,voter_key" });
+
+    if (error) {
+      toast({ title: "Vote failed", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    const { data } = await supabase.from("trip_votes").select("*").eq("trip_id", tripId).eq("subject_type", "expense").order("created_at", { ascending: false });
+    if (data) setExpenseVotes(data);
   };
 
   const getCoaching = async () => {
@@ -252,6 +368,21 @@ const TripExpenses = () => {
       return acc;
     }, []);
   const maxDaily = Math.max(1, ...dailySpend.map((d) => d.total));
+  const splitSummary = splits.reduce<Record<string, { owed: number; settled: number }>>((acc, split) => {
+    const current = acc[split.member_name] || { owed: 0, settled: 0 };
+    current.owed += Number(split.amount_owed);
+    if (split.settled) current.settled += Number(split.amount_owed);
+    acc[split.member_name] = current;
+    return acc;
+  }, {});
+  const expenseVoteSummary = expenseVotes.reduce<Record<string, { score: number; upvotes: number; downvotes: number }>>((acc, vote) => {
+    const current = acc[vote.subject_key] || { score: 0, upvotes: 0, downvotes: 0 };
+    current.score += vote.vote_value;
+    if (vote.vote_value > 0) current.upvotes += 1;
+    if (vote.vote_value < 0) current.downvotes += 1;
+    acc[vote.subject_key] = current;
+    return acc;
+  }, {});
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
@@ -353,6 +484,63 @@ const TripExpenses = () => {
         </motion.div>
       )}
 
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.09 }} className="mt-4 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="p-4 rounded-2xl bg-card shadow-card">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-primary" />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Phase 2</p>
+              <h3 className="font-display font-semibold text-foreground text-sm">Shared expense splitting</h3>
+            </div>
+          </div>
+          <div className="mt-3 space-y-2">
+            {Object.keys(splitSummary).length === 0 ? (
+              <p className="text-sm text-muted-foreground">Create an expense, then split it equally across your trip members.</p>
+            ) : (
+              Object.entries(splitSummary).map(([member, totals]) => (
+                <div key={member} className="rounded-xl border border-border/50 bg-muted/20 px-3 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-foreground">{member}</p>
+                    <p className="text-sm font-bold text-primary">₹{totals.owed.toLocaleString("en-IN")}</p>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Settled ₹{totals.settled.toLocaleString("en-IN")} · Remaining ₹{Math.max(0, totals.owed - totals.settled).toLocaleString("en-IN")}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-card shadow-card">
+          <div className="flex items-center gap-2">
+            <ArrowRightLeft className="h-4 w-4 text-primary" />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Fairness Pulse</p>
+              <h3 className="font-display font-semibold text-foreground text-sm">Group vote on spends</h3>
+            </div>
+          </div>
+          <div className="mt-3 space-y-2">
+            {expenses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Votes will appear once the group starts logging expenses.</p>
+            ) : (
+              expenses.slice(0, 4).map((expense) => {
+                const summary = expenseVoteSummary[expense.id] || { score: 0, upvotes: 0, downvotes: 0 };
+                return (
+                  <div key={`expense-vote-summary-${expense.id}`} className="rounded-xl border border-border/50 bg-muted/20 px-3 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-foreground truncate">{expense.description || categoryConfig[expense.category]?.label}</p>
+                      <p className="text-xs font-bold text-muted-foreground">Score {summary.score}</p>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{summary.upvotes} approve · {summary.downvotes} rethink</p>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </motion.div>
+
       {/* Add Expense Button */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mt-4 flex gap-3">
         <button onClick={() => setShowAdd(!showAdd)} className="flex-1 py-3 rounded-xl gradient-hero text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
@@ -395,6 +583,10 @@ const TripExpenses = () => {
               <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Date</label>
               <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none" />
             </div>
+            <div className="flex flex-col gap-1 mt-3">
+              <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Paid By</label>
+              <input type="text" value={payerName} onChange={(e) => setPayerName(e.target.value)} className="px-3 py-2 rounded-lg bg-muted/50 text-sm outline-none" placeholder="Who paid for this expense?" />
+            </div>
             <button onClick={addExpense} disabled={adding || !newAmount} className="w-full mt-3 py-2.5 rounded-xl gradient-hero text-primary-foreground font-semibold text-sm disabled:opacity-50">
               {adding ? "Adding..." : "Save Expense"}
             </button>
@@ -410,20 +602,80 @@ const TripExpenses = () => {
         ) : expenses.map((exp) => {
           const cfg = categoryConfig[exp.category] || categoryConfig.other;
           const Icon = cfg.icon;
+          const relatedSplits = splits.filter((split) => split.expense_id === exp.id);
+          const voteSummary = expenseVoteSummary[exp.id] || { score: 0, upvotes: 0, downvotes: 0 };
           return (
             <motion.div key={exp.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-3 p-3 rounded-xl bg-card shadow-card">
-              <div className={`h-9 w-9 rounded-lg bg-muted/50 flex items-center justify-center flex-shrink-0`}>
-                <Icon className={`h-4 w-4 ${cfg.color}`} />
+              className="p-3 rounded-xl bg-card shadow-card">
+              <div className="flex items-center gap-3">
+                <div className={`h-9 w-9 rounded-lg bg-muted/50 flex items-center justify-center flex-shrink-0`}>
+                  <Icon className={`h-4 w-4 ${cfg.color}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{exp.description || cfg.label}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {cfg.label} · {new Date(exp.expense_date).toLocaleDateString()} · Paid by {exp.payer_name || "Traveler"}
+                  </p>
+                </div>
+                <span className="text-sm font-bold text-foreground">₹{Number(exp.amount).toLocaleString("en-IN")}</span>
+                <button onClick={() => deleteExpense(exp.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground">{exp.description || cfg.label}</p>
-                <p className="text-[10px] text-muted-foreground">{cfg.label} · {new Date(exp.expense_date).toLocaleDateString()}</p>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={() => createEqualSplit(exp)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Split equally
+                </button>
+                <button
+                  onClick={() => voteOnExpense(exp, 1)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"
+                >
+                  <ThumbsUp className="h-3.5 w-3.5" />
+                  Worth it
+                </button>
+                <button
+                  onClick={() => voteOnExpense(exp, -1)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-[11px] font-semibold text-rose-700 dark:text-rose-300"
+                >
+                  <ThumbsDown className="h-3.5 w-3.5" />
+                  Too much
+                </button>
+                <span className="inline-flex items-center gap-1 rounded-lg bg-muted px-3 py-2 text-[11px] font-semibold text-muted-foreground">
+                  Score {voteSummary.score} · {voteSummary.upvotes}/{voteSummary.downvotes}
+                </span>
               </div>
-              <span className="text-sm font-bold text-foreground">₹{Number(exp.amount).toLocaleString("en-IN")}</span>
-              <button onClick={() => deleteExpense(exp.id)} className="text-muted-foreground hover:text-destructive transition-colors">
-                <Trash2 className="h-4 w-4" />
-              </button>
+
+              {relatedSplits.length > 0 && (
+                <div className="mt-3 rounded-xl border border-border/50 bg-muted/20 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Split status</p>
+                  <div className="mt-2 space-y-2">
+                    {relatedSplits.map((split) => (
+                      <div key={split.id} className="flex items-center justify-between gap-2 rounded-lg bg-card px-3 py-2">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{split.member_name}</p>
+                          <p className="text-[10px] text-muted-foreground">₹{Number(split.amount_owed).toLocaleString("en-IN")}</p>
+                        </div>
+                        <button
+                          onClick={() => toggleSplitSettlement(split.id, !split.settled)}
+                          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-semibold ${
+                            split.settled
+                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                              : "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                          }`}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          {split.settled ? "Settled" : "Mark settled"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </motion.div>
           );
         })}

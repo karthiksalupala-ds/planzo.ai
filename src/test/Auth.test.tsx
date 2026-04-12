@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import Auth from "../pages/Auth";
-import { BrowserRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router-dom";
 import React from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -47,16 +47,19 @@ vi.mock("@/integrations/supabase/client", () => {
 });
 
 describe("Auth Page Buttons Verification", () => {
+  const renderAuth = () =>
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Auth />
+      </MemoryRouter>
+    );
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("verifies Login/Signup toggle button functionality", () => {
-    render(
-      <BrowserRouter>
-        <Auth />
-     </BrowserRouter>
-    );
+    renderAuth();
     
     // Default is Login
     const toggleBtn = screen.getByText("Sign Up");
@@ -70,11 +73,7 @@ describe("Auth Page Buttons Verification", () => {
   it("verifies Submit button triggers authentication", async () => {
     mockSignIn.mockResolvedValue({ error: null });
     
-    render(
-      <BrowserRouter>
-        <Auth />
-      </BrowserRouter>
-    );
+    renderAuth();
 
     fireEvent.change(screen.getByPlaceholderText("Email address"), { target: { value: "test@test.com" } });
     fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "password123" } });
@@ -90,11 +89,7 @@ describe("Auth Page Buttons Verification", () => {
   it("verifies Sign Up button triggers registration", async () => {
     mockSignUp.mockResolvedValue({ error: null });
     
-    render(
-      <BrowserRouter>
-        <Auth />
-      </BrowserRouter>
-    );
+    renderAuth();
 
     // Switch to Sign Up mode
     const toggleBtn = screen.getByText("Sign Up");
@@ -114,28 +109,24 @@ describe("Auth Page Buttons Verification", () => {
   });
 
   it("verifies Google Login button triggers OAuth", async () => {
-    render(
-      <BrowserRouter>
-        <Auth />
-      </BrowserRouter>
-    );
+    renderAuth();
 
     const googleBtn = screen.getByText(/Continue with Google/i);
-    fireEvent.click(googleBtn);
+    await act(async () => {
+      fireEvent.click(googleBtn);
+    });
 
-    expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith(
-      expect.objectContaining({
-        provider: "google",
-      })
-    );
+    await waitFor(() => {
+      expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: "google",
+        })
+      );
+    });
   });
 
   it("verifies Forgot Password link navigation", () => {
-    render(
-      <BrowserRouter>
-        <Auth />
-      </BrowserRouter>
-    );
+    renderAuth();
 
     const forgotPasswordLink = screen.getByText(/Forgot/i);
     fireEvent.click(forgotPasswordLink);

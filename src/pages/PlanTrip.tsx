@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   Sparkles, Send, MapPin, IndianRupee, Calendar, Users, ChevronRight,
   Hotel, Utensils, Camera, Loader2, Heart, Mountain, Palmtree, Baby,
   User, Shield, Backpack, CloudSun, AlertCircle, Save, Train, Plane, Bus, RefreshCw, Pencil, TramFront, Bike,
-  Car, Navigation, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Share2, XCircle, ShoppingBag, Printer, Download, Plus, X, Clock, Navigation2, Map, CalendarPlus, PieChart, Zap, Star, ListChecks, IndianRupee as Rupee
+  Car, Navigation, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Share2, XCircle, ShoppingBag, Printer, Download, Plus, X, Clock, Navigation2, Map, CalendarPlus, PieChart, Zap, Star, ListChecks, BellRing, IndianRupee as Rupee
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,11 +25,40 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import TripCountdown from "@/components/TripCountdown";
 import { downloadTripICS, openGoogleCalendar } from "@/lib/calendar";
 import TravelMode from "@/components/TravelMode";
+import TripCollabPanel from "@/components/TripCollabPanel";
+import PriceWatchPanel from "@/components/PriceWatchPanel";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  applyWeatherAdjustmentToPlan,
+  extractPlanActivities,
+  getSuggestedPriceWatches,
+  getWeatherAdjustment,
+  toActorName,
+  toVoterKey,
+  type TripCollaborator,
+  type TripMessage,
+  type TripPriceWatch,
+  type TripVote,
+} from "@/lib/trip-features";
 
 interface Message {
   text: string;
   isUser: boolean;
 }
+
+interface WeatherForecastDay {
+  day?: {
+    avgtemp_c?: number;
+  };
+}
+
+type RingStyle = CSSProperties & Record<"--tw-ring-color", string>;
+type TravelModeKind = "flight" | "train" | "bus";
+type NormalizedTravelOption = TravelOption & {
+  __idx: number;
+  __normalizedMode: TravelModeKind;
+  id?: number | string;
+};
 
 const moods = [
   { id: "relax", label: "Relax", icon: Palmtree },
@@ -40,42 +69,105 @@ const moods = [
 ];
 
 // ── AI Caption Cycler Component ──────────────────────────────────────
-const AI_CAPTIONS = [
-  { icon: "✈️", title: "Booking your imagination...", sub: "Scanning 185+ destinations for the perfect match" },
-  { icon: "🗺️", title: "Charting unexplored routes...", sub: "Calculating optimal day-by-day experiences" },
-  { icon: "🌤️", title: "Checking the skies...", sub: "Fetching live weather & seasonal insights" },
-  { icon: "🏨", title: "Curating your stay...", sub: "Matching stays to your budget & vibe" },
-  { icon: "🍜", title: "Scouting local eats...", sub: "Finding must-try dishes and hidden gems" },
-  { icon: "💡", title: "Crafting insider tips...", sub: "Sourcing pro travel advice for your itinerary" },
-  { icon: "🎒", title: "Packing your bags...", sub: "Building a smart packing list for your journey" },
-  { icon: "🎯", title: "Almost there...", sub: "Putting the final touches on your perfect trip" },
+const buildAICaptions = (isMultiCity: boolean, isLongTrip: boolean) => [
+  {
+    stage: "1/6",
+    title: isMultiCity ? "Analyzing route context" : "Analyzing destination context",
+    sub: isMultiCity
+      ? "Reviewing each stop, transfer flow, and feasible route ordering."
+      : "Reviewing region highlights, travel windows, and route constraints."
+  },
+  {
+    stage: "2/6",
+    title: isMultiCity ? "Mapping city-to-city transitions" : "Building day-by-day structure",
+    sub: isMultiCity
+      ? "Balancing movement days with sightseeing to reduce fatigue."
+      : "Sequencing each day for pacing, variety, and commute efficiency."
+  },
+  {
+    stage: "3/6",
+    title: "Personalizing to your trip profile",
+    sub: "Applying your budget, trip duration, travelers, and vibe preferences."
+  },
+  {
+    stage: "4/6",
+    title: isLongTrip ? "Designing balanced long-stay flow" : "Enriching stays and experiences",
+    sub: isLongTrip
+      ? "Distributing high-energy and lighter days for a sustainable pace."
+      : "Selecting practical stay options, meals, and high-value activities."
+  },
+  {
+    stage: "5/6",
+    title: "Validating weather and logistics",
+    sub: isMultiCity
+      ? "Checking forecast guidance and transport fit across all segments."
+      : "Checking forecast guidance and local transport fit for each day."
+  },
+  {
+    stage: "6/6",
+    title: "Final quality pass",
+    sub: "Polishing recommendations and preparing your final itinerary output."
+  },
 ];
 
-function AICaptionCycler({ destination }: { destination: string }) {
+function AICaptionCycler({
+  destination,
+  stopCount,
+  days
+}: {
+  destination: string;
+  stopCount: number;
+  days: number;
+}) {
+  const isMultiCity = stopCount > 1;
+  const isLongTrip = days >= 6;
+  const captions = buildAICaptions(isMultiCity, isLongTrip);
   const [index, setIndex] = useState(0);
+
   useEffect(() => {
-    const t = setInterval(() => setIndex(i => (i + 1) % AI_CAPTIONS.length), 2800);
+    setIndex(0);
+  }, [isMultiCity, isLongTrip, destination]);
+
+  useEffect(() => {
+    const t = setInterval(() => setIndex(i => (i + 1) % captions.length), 2600);
     return () => clearInterval(t);
-  }, []);
-  const cap = AI_CAPTIONS[index];
+  }, [captions.length]);
+
+  const cap = captions[index];
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex w-full flex-col items-center gap-4">
+      <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 backdrop-blur-sm">
+        <Sparkles className="h-3.5 w-3.5 text-indigo-300" />
+        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/80">Planzo Engine</span>
+      </div>
+
       <AnimatePresence mode="wait">
         <motion.div
           key={index}
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -12 }}
-          transition={{ duration: 0.4 }}
-          className="flex flex-col items-center gap-2"
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.35 }}
+          className="flex flex-col items-center gap-2 text-center"
         >
-          <span className="text-5xl">{cap.icon}</span>
-          <p className="text-xl font-black text-white tracking-tight">{cap.title}</p>
-          <p className="text-sm text-white/40 font-medium">
-            {destination ? `${destination} — ${cap.sub}` : cap.sub}
+          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/55">{cap.stage}</p>
+          <p className="text-2xl font-black text-white tracking-tight">{cap.title}</p>
+          <p className="max-w-xl text-sm text-white/65 font-medium leading-relaxed">
+            {destination ? `${destination}: ${cap.sub}` : cap.sub}
           </p>
         </motion.div>
       </AnimatePresence>
+
+      <div className="flex items-center gap-1.5">
+        {captions.map((_, dotIndex) => (
+          <span
+            key={`caption-dot-${dotIndex}`}
+            className={`h-1.5 rounded-full transition-all duration-300 ${
+              dotIndex === index ? "w-6 bg-indigo-300" : "w-1.5 bg-white/35"
+            }`}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -107,12 +199,19 @@ const PlanTrip = () => {
   const [showMobileMap, setShowMobileMap] = useState(false);
   const [showTravelMode, setShowTravelMode] = useState(false);
   const [logisticsTab, setLogisticsTab] = useState<"all" | "flights" | "trains" | "buses">("all");
+  const [useInteractiveMap, setUseInteractiveMap] = useState(false);
   const [logisticsSortBy, setLogisticsSortBy] = useState<"recommended" | "price" | "duration" | "departure">("recommended");
   const [pinnedLogistics, setPinnedLogistics] = useState<number[]>([]);
   const [packingChecked, setPackingChecked] = useState<Set<number>>(new Set());
   const [chatMessages, setChatMessages] = useState<Message[]>([
     { text: "Hello! I'm your AI trip assistant. Ask me anything about your plan.", isUser: false },
   ]);
+  const [collaborators, setCollaborators] = useState<TripCollaborator[]>([]);
+  const [tripMessages, setTripMessages] = useState<TripMessage[]>([]);
+  const [tripVotes, setTripVotes] = useState<TripVote[]>([]);
+  const [priceWatches, setPriceWatches] = useState<TripPriceWatch[]>([]);
+  const [weatherApplied, setWeatherApplied] = useState(false);
+  const isMobile = useIsMobile();
 
   // Budget state
   const parsedDays = initialDays ? parseInt(initialDays) : 3;
@@ -152,6 +251,97 @@ const PlanTrip = () => {
   const updateRemotePlan = async (updatedPlan: TripPlan) => {
     if (tripId) {
       await supabase.from("saved_trips").update({ plan_data: updatedPlan as unknown as Json }).eq("id", tripId);
+    }
+  };
+
+  const fetchClientWeatherNote = async (dest: string) => {
+    if (!dest?.trim()) return null;
+    const weatherApiKey = import.meta.env.VITE_WEATHER_API_KEY || import.meta.env.VITE_WEATHERAPI_KEY;
+    const openWeatherKey = import.meta.env.VITE_OPENWEATHER_API_KEY || import.meta.env.VITE_WEATHER_API_KEY;
+
+    if (weatherApiKey) {
+      try {
+        const res = await fetch(`https://api.weatherapi.com/v1/forecast.json?key=${weatherApiKey}&q=${encodeURIComponent(dest)}&days=3&aqi=no`);
+        if (res.ok) {
+          const data = await res.json();
+          const condition = data?.current?.condition?.text || "Unknown";
+          const temp = data?.current?.temp_c;
+          const humidity = data?.current?.humidity;
+          const forecastDays = (data?.forecast?.forecastday || []) as WeatherForecastDay[];
+          const avg = forecastDays.length
+            ? Math.round(forecastDays.reduce((sum: number, day) => sum + (day?.day?.avgtemp_c || 0), 0) / forecastDays.length)
+            : null;
+          return `Current: ${condition}, ${temp ?? "N/A"}°C, ${humidity ?? "N/A"}% humidity.${avg !== null ? ` Forecast avg: ${avg}°C.` : ""}`;
+        }
+      } catch {
+        // try fallback provider below
+      }
+    }
+
+    if (openWeatherKey) {
+      try {
+        const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(dest)}&appid=${openWeatherKey}&units=metric`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const condition = data?.weather?.[0]?.main || "Unknown";
+        const temp = data?.main?.temp;
+        const humidity = data?.main?.humidity;
+        return `Current: ${condition}, ${temp ?? "N/A"}°C, ${humidity ?? "N/A"}% humidity.`;
+      } catch {
+        return null;
+      }
+    }
+
+    // Keyless fallback provider (Open-Meteo) so users still get real weather guidance.
+    try {
+      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(dest)}&count=1`);
+      if (geoRes.ok) {
+        const geo = await geoRes.json();
+        const lat = geo?.results?.[0]?.latitude;
+        const lon = geo?.results?.[0]?.longitude;
+        if (typeof lat === "number" && typeof lon === "number") {
+          const wRes = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=3&timezone=auto`
+          );
+          if (wRes.ok) {
+            const w = await wRes.json();
+            const temp = w?.current?.temperature_2m;
+            const humidity = w?.current?.relative_humidity_2m;
+            const maxArr = w?.daily?.temperature_2m_max || [];
+            const minArr = w?.daily?.temperature_2m_min || [];
+            const avg =
+              maxArr.length && minArr.length
+                ? Math.round(
+                    maxArr.reduce((sum: number, v: number, idx: number) => sum + (v + (minArr[idx] || 0)) / 2, 0) /
+                      maxArr.length
+                  )
+                : null;
+            return `Current: ${temp ?? "N/A"}°C, ${humidity ?? "N/A"}% humidity.${avg !== null ? ` Forecast avg: ${avg}°C.` : ""}`;
+          }
+        }
+      }
+    } catch {
+      // ignore and return null below
+    }
+    return null;
+  };
+
+  const geocodeDestination = async (dest: string) => {
+    const mapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!mapsKey || !dest?.trim()) return null;
+    try {
+      const res = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(dest)}&key=${mapsKey}`
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      const loc = data?.results?.[0]?.geometry?.location;
+      if (typeof loc?.lat === "number" && typeof loc?.lng === "number") {
+        return { lat: loc.lat, lng: loc.lng };
+      }
+      return null;
+    } catch {
+      return null;
     }
   };
 
@@ -245,14 +435,102 @@ const PlanTrip = () => {
   }, [tripId]);
 
   useEffect(() => {
+    if (!tripId) {
+      setCollaborators([]);
+      setTripMessages([]);
+      setTripVotes([]);
+      setPriceWatches([]);
+      return;
+    }
+
+    void loadSharedTripData(tripId);
+    if (user?.id && tripOwnerId === user.id) {
+      void ensureOwnerCollaborator(tripId);
+    }
+
+    const channel = supabase.channel(`trip-social-${tripId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_collaborators", filter: `trip_id=eq.${tripId}` }, () => {
+        void loadSharedTripData(tripId);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_messages", filter: `trip_id=eq.${tripId}` }, () => {
+        void loadSharedTripData(tripId);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_votes", filter: `trip_id=eq.${tripId}` }, () => {
+        void loadSharedTripData(tripId);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_price_watches", filter: `trip_id=eq.${tripId}` }, () => {
+        void loadSharedTripData(tripId);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [ensureOwnerCollaborator, loadSharedTripData, tripId, tripOwnerId, user?.id]);
+
+  useEffect(() => {
     if (!tripId) return;
     const title = plan?.destination || destination || "Trip";
     localStorage.setItem("planzo_current_trip", JSON.stringify({ id: tripId, title }));
   }, [tripId, plan?.destination, destination]);
+
+  useEffect(() => {
+    setWeatherApplied(false);
+  }, [plan?.weatherNote, tripId]);
+
+  useEffect(() => {
+    if (!plan) return;
+    let cancelled = false;
+    const enrich = async () => {
+      const dest = plan.destination || destination;
+      const patch: Partial<TripPlan> = {};
+      if (!plan.weatherNote || String(plan.weatherNote).toLowerCase().includes("unavailable")) {
+        const weather = await fetchClientWeatherNote(dest);
+        if (weather) patch.weatherNote = weather;
+      }
+      const hasMapCenter = typeof plan?.map?.lat === "number" && typeof plan?.map?.lng === "number";
+      if (!hasMapCenter) {
+        const geo = await geocodeDestination(dest);
+        if (geo) {
+          patch.map = {
+            lat: geo.lat,
+            lng: geo.lng,
+            embedUrl: `https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(dest)}&zoom=11`,
+          };
+        }
+      }
+      if (!cancelled && Object.keys(patch).length > 0) {
+        setPlan((prev) => (prev ? { ...prev, ...patch } : prev));
+      }
+    };
+    void enrich();
+    return () => {
+      cancelled = true;
+    };
+  }, [plan, destination]);
+
+  useEffect(() => {
+    const handler = () => {
+      const next = new URLSearchParams(searchParams);
+      next.set("tab", "budget");
+      setSearchParams(next, { replace: true });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+    window.addEventListener("planzo-open-budget", handler);
+    return () => window.removeEventListener("planzo-open-budget", handler);
+  }, [searchParams, setSearchParams]);
   const isOwner = !tripId || (user && tripOwnerId === user.id);
   const isGuest = !user;
   const isViewer = user && tripOwnerId && tripOwnerId !== user.id;
   const pdfRef = useRef<HTMLDivElement>(null);
+  const actorName = toActorName(
+    (user?.user_metadata?.display_name as string | undefined) || user?.email?.split("@")[0],
+    user?.email
+  );
+  const actorKey = toVoterKey(user?.id, actorName, user?.email);
+  const weatherAdjustment = useMemo(() => getWeatherAdjustment(String(plan?.weatherNote || "")), [plan?.weatherNote]);
+  const activityRefs = useMemo(() => (plan ? extractPlanActivities(plan) : []), [plan]);
+  const suggestedPriceWatches = useMemo(() => (plan ? getSuggestedPriceWatches(plan) : []), [plan]);
 
   useEffect(() => {
     if (!plan?.itinerary) return;
@@ -293,6 +571,180 @@ const PlanTrip = () => {
     }
   };
 
+  const ensureOwnerCollaborator = useCallback(async (currentTripId: string) => {
+    if (!user) return;
+    await supabase.from("trip_collaborators").upsert({
+      trip_id: currentTripId,
+      user_id: user.id,
+      email: user.email || null,
+      display_name: actorName,
+      role: "owner",
+      status: "active",
+      invited_by: user.id,
+    }, { onConflict: "trip_id,user_id" });
+  }, [actorName, user]);
+
+  const loadSharedTripData = useCallback(async (currentTripId: string) => {
+    const [
+      collaboratorsRes,
+      messagesRes,
+      votesRes,
+      watchesRes,
+    ] = await Promise.all([
+      supabase.from("trip_collaborators").select("*").eq("trip_id", currentTripId).order("created_at", { ascending: true }),
+      supabase.from("trip_messages").select("*").eq("trip_id", currentTripId).order("created_at", { ascending: false }).limit(20),
+      supabase.from("trip_votes").select("*").eq("trip_id", currentTripId).order("created_at", { ascending: false }),
+      supabase.from("trip_price_watches").select("*").eq("trip_id", currentTripId).order("created_at", { ascending: false }),
+    ]);
+
+    if (!collaboratorsRes.error) setCollaborators(collaboratorsRes.data || []);
+    if (!messagesRes.error) setTripMessages(messagesRes.data || []);
+    if (!votesRes.error) setTripVotes(votesRes.data || []);
+    if (!watchesRes.error) setPriceWatches(watchesRes.data || []);
+  }, []);
+
+  const handleInviteCollaborator = async ({ displayName, email }: { displayName: string; email?: string }) => {
+    if (!tripId) {
+      toast({ title: "Save trip first", description: "Create the trip before inviting people." });
+      return;
+    }
+
+    const payload = {
+      trip_id: tripId,
+      display_name: displayName,
+      email: email || null,
+      role: "editor",
+      status: email ? "invited" : "active",
+      invited_by: user?.id || null,
+    };
+    const { error } = email
+      ? await supabase.from("trip_collaborators").upsert(payload, { onConflict: "trip_id,email" })
+      : await supabase.from("trip_collaborators").insert(payload);
+
+    if (error) {
+      toast({ title: "Invite failed", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    await loadSharedTripData(tripId);
+    toast({ title: "Collaborator added", description: `${displayName} can now join this trip.` });
+  };
+
+  const handleSendTripMessage = async (message: string) => {
+    if (!tripId) return;
+    const { error } = await supabase.from("trip_messages").insert({
+      trip_id: tripId,
+      user_id: user?.id || null,
+      display_name: actorName,
+      message,
+    });
+
+    if (error) {
+      toast({ title: "Message failed", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    await loadSharedTripData(tripId);
+  };
+
+  const handleActivityVote = async (
+    activity: { key: string; label: string },
+    voteValue: 1 | -1
+  ) => {
+    if (!tripId) {
+      toast({ title: "Save trip first", description: "Voting starts after the trip is saved." });
+      return;
+    }
+
+    const { error } = await supabase.from("trip_votes").upsert({
+      trip_id: tripId,
+      subject_type: "activity",
+      subject_key: activity.key,
+      subject_label: activity.label,
+      voter_key: actorKey,
+      voter_name: actorName,
+      user_id: user?.id || null,
+      vote_value: voteValue,
+    }, { onConflict: "trip_id,subject_type,subject_key,voter_key" });
+
+    if (error) {
+      toast({ title: "Vote failed", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    await loadSharedTripData(tripId);
+  };
+
+  const handleCreatePriceWatch = async (watch: {
+    label: string;
+    category: string;
+    baseline_price: number;
+    current_price: number;
+    target_price: number;
+    notes?: string | null;
+  }) => {
+    if (!tripId) {
+      toast({ title: "Save trip first", description: "Price alerts need a saved trip." });
+      return;
+    }
+
+    const status = watch.current_price <= watch.target_price ? "alert" : "watching";
+    const { error } = await supabase.from("trip_price_watches").insert({
+      trip_id: tripId,
+      label: watch.label,
+      category: watch.category,
+      baseline_price: watch.baseline_price,
+      current_price: watch.current_price,
+      target_price: watch.target_price,
+      status,
+      notes: watch.notes || null,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      toast({ title: "Watch creation failed", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    await loadSharedTripData(tripId);
+    toast({ title: "Price watch added", description: `${watch.label} is now being tracked.` });
+  };
+
+  const handleUpdatePriceWatch = async (watchId: string, nextPrice: number) => {
+    if (!Number.isFinite(nextPrice) || nextPrice <= 0) return;
+    const existing = priceWatches.find((watch) => watch.id === watchId);
+    if (!existing) return;
+    const status = nextPrice <= Number(existing.target_price) ? "alert" : existing.status === "booked" ? "booked" : "watching";
+
+    const { error } = await supabase.from("trip_price_watches").update({
+      current_price: nextPrice,
+      status,
+      updated_at: new Date().toISOString(),
+    }).eq("id", watchId);
+
+    if (error) {
+      toast({ title: "Price update failed", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    await loadSharedTripData(tripId!);
+    toast({
+      title: status === "alert" ? "Target reached" : "Price updated",
+      description: status === "alert" ? "This watch is now below the target price." : "Latest market price saved.",
+    });
+  };
+
+  const handleApplyWeatherAdjustment = async () => {
+    if (!plan || !weatherAdjustment) return;
+    const adjustedPlan = applyWeatherAdjustmentToPlan(plan);
+    setPlan(adjustedPlan);
+    setWeatherApplied(true);
+    if (tripId) {
+      await updateRemotePlan(adjustedPlan);
+    }
+    toast({ title: "Weather-smart update applied", description: weatherAdjustment.title });
+  };
+
   const handleSaveTrip = async () => {
     if (!user) {
       toast({ title: "Sign in required", description: "Please sign in to save trips.", variant: "destructive" });
@@ -300,7 +752,7 @@ const PlanTrip = () => {
     }
     if (!plan) return;
     setSaving(true);
-    const { data, error } = await supabase.from("saved_trips").insert({
+    const payload = {
       user_id: user.id,
       title: plan.destination || destination,
       query: destination,
@@ -311,14 +763,26 @@ const PlanTrip = () => {
       plan_data: (plan as unknown) as Json,
       start_date: startDate || null,
       status: "planned",
-    }).select().single();
+    };
+    const request = tripId
+      ? supabase.from("saved_trips").update(payload).eq("id", tripId).select().single()
+      : supabase.from("saved_trips").insert(payload).select().single();
+    const { data, error } = await request;
     setSaving(false);
     if (error) {
       toast({ title: "Save failed", description: error.message, variant: "destructive" });
     } else if (data) {
       setTripId(data.id);
+      setTripOwnerId(data.user_id);
       setSearchParams({ id: data.id }, { replace: true });
-      toast({ title: "Trip saved!", description: "You can now safely share this URL with friends for multiplayer collaboration!" });
+      await ensureOwnerCollaborator(data.id);
+      await loadSharedTripData(data.id);
+      toast({
+        title: tripId ? "Trip updated" : "Trip saved!",
+        description: tripId
+          ? "Your latest itinerary, collaboration, and watch settings are saved."
+          : "You can now safely share this URL with friends for multiplayer collaboration!",
+      });
     }
   };
 
@@ -419,6 +883,39 @@ const PlanTrip = () => {
             return { ...day, heroImage, activities: enrichedActivities };
           })
         );
+      }
+
+      if (!responseData.weatherNote || String(responseData.weatherNote).toLowerCase().includes("unavailable")) {
+        const weatherNote = await fetchClientWeatherNote(responseData.destination || destination);
+        if (weatherNote) {
+          responseData.weatherNote = weatherNote;
+        }
+      }
+
+      const hasMapCenter = typeof responseData?.map?.lat === "number" && typeof responseData?.map?.lng === "number";
+      if (!hasMapCenter) {
+        const geo = await geocodeDestination(responseData.destination || destination);
+        if (geo) {
+          responseData.map = {
+            lat: geo.lat,
+            lng: geo.lng,
+            embedUrl: `https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(responseData.destination || destination)}&zoom=11`,
+          };
+          if (responseData.itinerary) {
+            responseData.itinerary = responseData.itinerary.map((day) => ({
+              ...day,
+              activities: day.activities?.map((act) =>
+                typeof act === "string"
+                  ? act
+                  : {
+                      ...act,
+                      lat: typeof act.lat === "number" ? act.lat : geo.lat,
+                      lng: typeof act.lng === "number" ? act.lng : geo.lng,
+                    }
+              ),
+            }));
+          }
+        }
       }
 
       setPlan(responseData);
@@ -603,7 +1100,7 @@ const PlanTrip = () => {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* ── HERO SECTION ── */}
-      <div className="relative w-full overflow-hidden" style={{ minHeight: "560px" }}>
+      <div className="relative w-full overflow-hidden" style={{ minHeight: "540px" }}>
         {/* Gradient backdrop */}
         <div
           className="absolute inset-0"
@@ -613,7 +1110,8 @@ const PlanTrip = () => {
         />
         
         {/* Decorative mask for bottom transition */}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-95" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/45 to-transparent opacity-95" />
+        <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-black/45 via-black/15 to-transparent pointer-events-none" />
 
         {/* Animated blobs */}
         <motion.div
@@ -639,7 +1137,7 @@ const PlanTrip = () => {
         />
 
         {/* Hero content */}
-        <div className="relative z-10 flex flex-col items-center justify-center text-center px-6 pt-24 pb-48">
+        <div className="relative z-10 mx-auto flex w-full max-w-4xl flex-col items-center justify-center px-6 pt-20 pb-20 text-center md:pb-24">
           {/* Badge */}
           <motion.div
             initial={{ opacity: 0, y: -16 }}
@@ -685,57 +1183,43 @@ const PlanTrip = () => {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="mt-8 max-w-2xl text-base md:text-xl opacity-80 leading-relaxed mx-auto"
+            className="mt-7 max-w-2xl text-sm md:text-lg opacity-85 leading-relaxed mx-auto"
             style={{ color: "rgba(196,213,255,0.85)" }}
           >
             Craft a stunning, fully personalized itinerary — complete with budgets, logistics &amp; day-by-day activities in seconds.
           </motion.p>
-          
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="flex flex-wrap justify-center gap-8 md:gap-16 pt-4">
-            {[
-              { val: "1.2M+", label: "Trips Orchestrated" },
-              { val: "185+", label: "Destinations" },
-              { val: "4.9/5", label: "User Trust Score" }
-            ].map(s => (
-              <div key={s.label} className="text-center group">
-                <p className="text-2xl font-black text-white group-hover:text-indigo-400 transition-colors">{s.val}</p>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{s.label}</p>
-              </div>
-            ))}
-          </motion.div>
-        </div>
-      </div>
-
       {/* ── SEARCH CARD ── */}
       {!plan && (
-      <div className="relative z-30 px-4 md:px-6 max-w-4xl mx-auto -mt-36 pb-24">
+      <>
+      <div className="relative z-30 mt-8 w-full">
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35, type: "spring", damping: 20 }}
-          className="rounded-[40px] overflow-hidden shadow-[0_40px_80px_-20px_rgba(0,0,0,0.3)] border-t border-white/40"
+          className="rounded-[30px] overflow-hidden shadow-[0_32px_68px_-26px_rgba(0,0,0,0.24)] border-t border-white/40"
           style={{
-            background: "rgba(255, 255, 255, 0.88)",
-            backdropFilter: "blur(48px) saturate(200%)",
+            background: "rgba(255, 255, 255, 0.9)",
+            backdropFilter: "blur(32px) saturate(180%)",
             border: "1px solid rgba(255, 255, 255, 0.6)",
             boxShadow: `inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 32px 64px -16px ${activeConfig.glow}`,
           }}
         >
           {/* Card header – Mood chips */}
-          <div className="px-10 pt-10 pb-6 border-b" style={{ borderColor: "rgba(0,0,0,0.04)" }}>
+          <div className="px-6 pt-7 pb-5 md:px-8 md:pt-8 md:pb-6 border-b" style={{ borderColor: "rgba(0,0,0,0.04)" }}>
             <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-5" style={{ color: activeConfig.color }}>
               Personalize Your Journey
             </p>
-            <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
+            <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1.5">
               {moods.map((m) => (
                 <button
                   key={m.id}
                   onClick={() => setActiveMood(m.id)}
-                  className={`flex items-center gap-2.5 px-6 py-3 rounded-[20px] text-xs font-black transition-all duration-300 ${
+                  className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-xs font-black transition-all duration-300 whitespace-nowrap ${
                     activeMood === m.id
-                      ? `${activeConfig.bg} text-white shadow-[0_12px_24px_-4px_${activeConfig.glow}] scale-[1.05]`
+                      ? `${activeConfig.bg} text-white shadow-md`
                       : "bg-slate-100/60 text-slate-500 hover:bg-slate-200/60 hover:text-slate-700"
                   }`}
+                  style={activeMood === m.id ? { boxShadow: `0 10px 18px -8px ${activeConfig.glow}` } : undefined}
                 >
                   <m.icon className="h-4 w-4" />
                   {m.label}
@@ -745,14 +1229,14 @@ const PlanTrip = () => {
           </div>
 
           {/* Card body */}
-          <div className="p-10 pt-8">
+          <div className="p-6 pt-6 md:p-8 md:pt-7">
             {/* AI Input */}
-            <div className="flex items-start gap-6">
+            <div className="flex items-start gap-4 md:gap-5">
               <motion.div 
                 whileHover={{ scale: 1.1, rotate: 5 }}
-                className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-xl shadow-indigo-600/20 ring-1 ring-white/20"
+                className="h-11 w-11 md:h-12 md:w-12 rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-600/20 ring-1 ring-white/20"
               >
-                <Sparkles className="h-7 w-7 text-white" />
+                <Sparkles className="h-5 w-5 md:h-6 md:w-6 text-white" />
               </motion.div>
               <div className="flex-1 space-y-4">
                 <AnimatePresence mode="popLayout">
@@ -780,10 +1264,10 @@ const PlanTrip = () => {
                             onKeyDown={handleDestinationKeyDown}
                             onBlur={() => setTimeout(() => { setSuggestions([]); setAutocompleteIndex(null); }, 150)}
                             placeholder={index === 0 ? 'Where to? (e.g. Kyoto, Japan)' : 'Next destination...'}
-                            className="w-full bg-slate-100/40 rounded-[22px] px-6 py-4 text-base text-slate-900 outline-none placeholder:text-slate-400 focus:ring-4 transition-all font-bold border border-slate-200/60 group-hover:bg-slate-100/80 group-focus-within:border-transparent group-focus-within:bg-white overflow-hidden shadow-inner"
+                            className="w-full bg-slate-100/40 rounded-2xl px-5 py-3.5 text-sm md:text-base text-slate-900 outline-none placeholder:text-slate-400 focus:ring-4 transition-all font-bold border border-slate-200/60 group-hover:bg-slate-100/80 group-focus-within:border-transparent group-focus-within:bg-white overflow-hidden shadow-inner"
                             style={{ 
                               '--tw-ring-color': activeConfig.glow,
-                            } as any}
+                            } as RingStyle}
                             autoComplete="off"
                           />
                           {/* Autocomplete dropdown */}
@@ -839,14 +1323,14 @@ const PlanTrip = () => {
             </div>
 
             {/* Quick Options */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-5 mt-10">
+            <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 { label: "Budget (₹)", icon: IndianRupee, value: budget, onChange: setBudget, type: "number", min: 500 },
                 { label: "Days", icon: Calendar, value: days, onChange: (v: string) => setDays(Math.min(30, Math.max(1, parseInt(v) || 1))), type: "number", min: 1, max: 30 },
                 { label: "Travelers", icon: Users, value: travelers, onChange: (v: string) => setTravelers(Math.min(20, Math.max(1, parseInt(v) || 1))), type: "number", min: 1, max: 20 },
               ].map((opt) => (
-                <div key={opt.label} className="flex flex-col gap-2">
-                  <label className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center gap-2 ml-1">
+                <div key={opt.label} className="rounded-2xl border border-slate-200/60 bg-white/50 p-3">
+                  <label className="mb-2 text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center gap-2">
                     <opt.icon className="h-3 w-3" style={{ color: activeConfig.color }} /> {opt.label}
                   </label>
                   <input
@@ -855,14 +1339,14 @@ const PlanTrip = () => {
                     min={opt.min}
                     max={opt.max}
                     onChange={(e) => opt.onChange(e.target.value)}
-                    className="px-5 py-4 rounded-[22px] bg-slate-100/40 text-sm text-slate-900 outline-none focus:ring-4 border border-slate-200/60 transition-all font-bold focus:bg-white"
-                    style={{ '--tw-ring-color': activeConfig.glow } as any}
+                    className="h-[52px] w-full rounded-xl border border-slate-200/70 bg-slate-100/60 px-4 text-sm text-slate-900 outline-none transition-all font-bold focus:bg-white focus:ring-4"
+                    style={{ '--tw-ring-color': activeConfig.glow } as RingStyle}
                   />
                 </div>
               ))}
               
-              <div className="flex flex-col gap-2">
-                <label className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center gap-2 ml-1">
+              <div className="rounded-2xl border border-slate-200/60 bg-white/50 p-3">
+                <label className="mb-2 text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center gap-2">
                   <CalendarPlus className="h-3 w-3" style={{ color: activeConfig.color }} /> Date
                 </label>
                 <input
@@ -870,8 +1354,8 @@ const PlanTrip = () => {
                   value={startDate}
                   min={new Date().toISOString().split("T")[0]}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="px-5 py-4 rounded-[22px] bg-slate-100/40 text-sm text-slate-900 outline-none focus:ring-4 border border-slate-200/60 transition-all font-bold focus:bg-white"
-                  style={{ '--tw-ring-color': activeConfig.glow } as any}
+                  className="h-[52px] px-4 py-3 rounded-2xl bg-slate-100/40 text-sm text-slate-900 outline-none focus:ring-4 border border-slate-200/60 transition-all font-bold focus:bg-white"
+                  style={{ '--tw-ring-color': activeConfig.glow } as RingStyle}
                 />
               </div>
             </div>
@@ -881,7 +1365,7 @@ const PlanTrip = () => {
               whileTap={{ scale: 0.98 }}
               onClick={handlePlan}
               disabled={isPlanning || !destination.trim()}
-              className={`w-full mt-10 py-5 rounded-[26px] ${activeConfig.bg} text-white font-black text-[11px] uppercase tracking-[0.28em] flex items-center justify-center gap-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden`}
+              className={`w-full mt-8 py-4 rounded-2xl ${activeConfig.bg} text-white font-black text-[11px] uppercase tracking-[0.24em] flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden`}
               style={{ boxShadow: `0 15px 35px -12px ${activeConfig.glow}` }}
             >
               {isPlanning && (
@@ -907,6 +1391,7 @@ const PlanTrip = () => {
             )}
           </div>
         </motion.div>
+      </div>
 
         {/* Error State */}
         <AnimatePresence>
@@ -968,7 +1453,11 @@ const PlanTrip = () => {
                 </div>
 
                 {/* Cycling captions */}
-                <AICaptionCycler destination={destination} />
+                <AICaptionCycler
+                  destination={destination}
+                  stopCount={destinations.filter((d) => d.trim()).length}
+                  days={days}
+                />
 
                 {/* Progress bar */}
                 <div className="w-full max-w-xs">
@@ -985,13 +1474,15 @@ const PlanTrip = () => {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </>
       )}
+      </div>
+      </div>
 
       {/* Generated Plan */}
       <AnimatePresence>
         {plan && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-8">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-8 pb-40 md:pb-0">
             {/* Header / Summary Card */}
             <div className="mb-8 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
               {plan.destinationImage && (
@@ -1086,8 +1577,15 @@ const PlanTrip = () => {
 
             {/* Content Tabs */}
             <div className="space-y-6">
-              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-[400px] md:static md:w-fit md:translate-x-0 md:max-w-none flex items-center justify-between md:justify-start gap-1 p-1.5 md:p-1 bg-background/95 md:bg-muted/40 backdrop-blur-xl md:backdrop-blur-md rounded-2xl border border-border shadow-2xl md:shadow-none">
-                {(['itinerary', 'map', 'budget', 'logistics'] as const).map((tab) => {
+              <div
+                className="fixed left-1/2 z-[60] w-[94%] max-w-[420px] -translate-x-1/2 overflow-x-auto rounded-2xl border border-border bg-background/98 p-1.5 shadow-xl md:static md:w-fit md:max-w-none md:translate-x-0 md:overflow-visible md:bg-muted/40 md:p-1 md:shadow-none"
+                style={{
+                  bottom: isMobile ? "calc(5.75rem + env(safe-area-inset-bottom))" : undefined,
+                  backdropFilter: isMobile ? "none" : "blur(12px)",
+                }}
+              >
+                <div className="flex min-w-max items-center justify-start gap-1">
+                {(['itinerary', 'map', 'budget', 'logistics', 'group', 'watch'] as const).map((tab) => {
                   const isActive = (searchParams.get('tab') || 'itinerary') === tab;
                   const getTabIcon = () => {
                     switch(tab) {
@@ -1095,6 +1593,8 @@ const PlanTrip = () => {
                       case 'map': return <Map className="h-5 w-5 md:hidden" />;
                       case 'budget': return <IndianRupee className="h-5 w-5 md:hidden" />;
                       case 'logistics': return <Navigation className="h-5 w-5 md:hidden" />;
+                      case 'group': return <Users className="h-5 w-5 md:hidden" />;
+                      case 'watch': return <BellRing className="h-5 w-5 md:hidden" />;
                     }
                   };
                   return (
@@ -1105,7 +1605,7 @@ const PlanTrip = () => {
                         next.set('tab', tab);
                         setSearchParams(next, { replace: true });
                       }}
-                      className={`flex-1 flex flex-col items-center justify-center gap-1 md:block md:flex-none md:px-6 py-2.5 rounded-xl text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all ${
+                      className={`min-w-[72px] flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-2.5 text-[10px] font-bold uppercase tracking-widest transition-all md:min-w-0 md:block md:flex-none md:px-6 md:text-xs ${
                         isActive
                           ? "bg-card text-slate-800 dark:text-slate-100 shadow-card border border-border/50 scale-105 md:scale-100"
                           : "text-muted-foreground hover:text-slate-800 dark:text-slate-100"
@@ -1116,6 +1616,7 @@ const PlanTrip = () => {
                     </button>
                   );
                 })}
+                </div>
               </div>
 
               {/* Tab Content Rendering */}
@@ -1126,6 +1627,36 @@ const PlanTrip = () => {
                   case 'itinerary':
                     return (
                       <div className="space-y-6">
+                        {weatherAdjustment && (
+                          <div className={`rounded-2xl border p-5 shadow-sm ${
+                            weatherAdjustment.severity === "high"
+                              ? "border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/20"
+                              : weatherAdjustment.severity === "medium"
+                                ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20"
+                                : "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/20"
+                          }`}>
+                            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Phase 3</p>
+                                <h3 className="mt-1 text-xl font-black text-foreground">{weatherAdjustment.title}</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">{weatherAdjustment.summary}</p>
+                                <div className="mt-3 space-y-1.5">
+                                  {weatherAdjustment.actions.map((action) => (
+                                    <p key={action} className="text-sm text-foreground/85">• {action}</p>
+                                  ))}
+                                </div>
+                              </div>
+                              <button
+                                onClick={handleApplyWeatherAdjustment}
+                                disabled={weatherApplied}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-foreground px-4 text-sm font-semibold text-background disabled:opacity-60"
+                              >
+                                <CloudSun className="h-4 w-4" />
+                                {weatherApplied ? "Applied" : "Apply smart replanning"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         <ItineraryDisplay
                           plan={plan}
                           activeDayIndex={activeDayIndex}
@@ -1137,19 +1668,81 @@ const PlanTrip = () => {
                         />
                       </div>
                     );
+                  case 'group':
+                    return (
+                      <TripCollabPanel
+                        shareUrl={window.location.href}
+                        canManage={Boolean(isOwner && tripId)}
+                        collaborators={collaborators}
+                        messages={tripMessages}
+                        votes={tripVotes.filter((vote) => vote.subject_type === "activity")}
+                        activities={activityRefs}
+                        onInvite={handleInviteCollaborator}
+                        onSendMessage={handleSendTripMessage}
+                        onVote={handleActivityVote}
+                      />
+                    );
+                  case 'watch':
+                    return (
+                      <PriceWatchPanel
+                        watches={priceWatches}
+                        suggestions={suggestedPriceWatches}
+                        onCreateWatch={handleCreatePriceWatch}
+                        onUpdateWatch={handleUpdatePriceWatch}
+                      />
+                    );
 
                   case 'map':
+                    {
+                      const fallbackEmbed =
+                        plan.map?.embedUrl ||
+                        `https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(plan.destination || destination)}&zoom=11`;
+                      const hasMapCoords = typeof plan?.map?.lat === "number" && typeof plan?.map?.lng === "number";
+                      const osmEmbed = hasMapCoords
+                        ? `https://www.openstreetmap.org/export/embed.html?bbox=${(plan.map!.lng as number) - 0.06}%2C${(plan.map!.lat as number) - 0.04}%2C${(plan.map!.lng as number) + 0.06}%2C${(plan.map!.lat as number) + 0.04}&layer=mapnik&marker=${plan.map!.lat}%2C${plan.map!.lng}`
+                        : `https://www.openstreetmap.org/export/embed.html?bbox=72.7%2C15.2%2C74.5%2C16.4&layer=mapnik&marker=15.5%2C73.8`;
                     return (
                       <div className="bg-card rounded-3xl border border-border/50 shadow-elevated overflow-hidden h-[600px] relative">
-                        <InteractiveMap plan={plan} />
+                        {useInteractiveMap && (hasMapCoords || plan?.itinerary?.some((day: TripDay) => day?.activities?.some((activity: TripActivity | string) => typeof activity !== "string" && typeof activity?.lat === "number" && typeof activity?.lng === "number"))) ? (
+                          <InteractiveMap plan={plan} />
+                        ) : (
+                          <iframe
+                            title={`Map fallback for ${plan.destination || destination}`}
+                            src={hasMapCoords ? osmEmbed : fallbackEmbed}
+                            className="h-full w-full"
+                            style={{ border: 0 }}
+                            loading="lazy"
+                            referrerPolicy="no-referrer-when-downgrade"
+                            allowFullScreen
+                          />
+                        )}
                         <div className="absolute bottom-6 left-6 right-6 pointer-events-none">
                           <div className="bg-card/90 backdrop-blur-xl p-4 rounded-2xl shadow-lg border border-border inline-block pointer-events-auto">
-                            <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Click markers to see details</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">Real-time road paths calculated via Google Directions API</p>
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                              {useInteractiveMap ? "Click markers to see details" : "Map preview mode (stable fallback)"}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              {useInteractiveMap ? "Real-time road paths calculated via Google Directions API" : "If interactive map fails, keep preview mode for reliable rendering."}
+                            </p>
+                            <div className="mt-2 flex items-center gap-2">
+                              <button
+                                onClick={() => setUseInteractiveMap((prev) => !prev)}
+                                className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-[10px] font-semibold text-foreground hover:bg-muted transition-colors"
+                              >
+                                {useInteractiveMap ? "Use stable preview" : "Try interactive map"}
+                              </button>
+                              <button
+                                onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(plan.destination || destination)}`, "_blank")}
+                                className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-[10px] font-semibold text-foreground hover:bg-muted transition-colors"
+                              >
+                                Open in Google Maps
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
                     );
+                    }
 
                   case 'budget':
                     return (
@@ -1253,7 +1846,7 @@ const PlanTrip = () => {
 
                   case 'logistics':
                     {
-                      const getNormalizedMode = (opt: any): "flight" | "train" | "bus" => {
+                      const getNormalizedMode = (opt: TravelOption): TravelModeKind => {
                         const rawMode = String(opt?.mode || "").toLowerCase();
                         const rawOperator = String(opt?.operator || "").toLowerCase();
                         const rawType = String(opt?.type || "").toLowerCase();
@@ -1263,15 +1856,15 @@ const PlanTrip = () => {
                         return "bus";
                       };
 
-                      const normalizedOptions = (plan.travelOptions || []).map((o: any, idx: number) => ({
+                      const normalizedOptions: NormalizedTravelOption[] = (plan.travelOptions || []).map((o, idx) => ({
                         ...o,
                         __idx: idx,
                         __normalizedMode: getNormalizedMode(o),
                       }));
 
-                      const flights = normalizedOptions.filter((o: any) => o.__normalizedMode === 'flight');
-                      const trains = normalizedOptions.filter((o: any) => o.__normalizedMode === 'train');
-                      const buses = normalizedOptions.filter((o: any) => o.__normalizedMode === 'bus');
+                      const flights = normalizedOptions.filter((o) => o.__normalizedMode === 'flight');
+                      const trains = normalizedOptions.filter((o) => o.__normalizedMode === 'train');
+                      const buses = normalizedOptions.filter((o) => o.__normalizedMode === 'bus');
 
                       const filteredOptions = logisticsTab === "flights" ? flights
                         : logisticsTab === "trains" ? trains
@@ -1294,7 +1887,7 @@ const PlanTrip = () => {
                         return Number(parts[1]) * 60 + Number(parts[2]);
                       };
 
-                      const sortedOptions = [...filteredOptions].sort((a: any, b: any) => {
+                      const sortedOptions = [...filteredOptions].sort((a, b) => {
                         if (logisticsSortBy === "price") {
                           const ap = a.price ?? a.estimatedCost ?? Number.POSITIVE_INFINITY;
                           const bp = b.price ?? b.estimatedCost ?? Number.POSITIVE_INFINITY;
@@ -1316,12 +1909,12 @@ const PlanTrip = () => {
 
                       const allOptions = normalizedOptions;
                       const cheapestOption = allOptions.length
-                        ? [...allOptions].sort((a: any, b: any) => (a.price ?? a.estimatedCost ?? Number.POSITIVE_INFINITY) - (b.price ?? b.estimatedCost ?? Number.POSITIVE_INFINITY))[0]
+                        ? [...allOptions].sort((a, b) => (a.price ?? a.estimatedCost ?? Number.POSITIVE_INFINITY) - (b.price ?? b.estimatedCost ?? Number.POSITIVE_INFINITY))[0]
                         : null;
                       const fastestOption = allOptions.length
-                        ? [...allOptions].sort((a: any, b: any) => parseDurationMinutes(a.duration) - parseDurationMinutes(b.duration))[0]
+                        ? [...allOptions].sort((a, b) => parseDurationMinutes(a.duration) - parseDurationMinutes(b.duration))[0]
                         : null;
-                      const bestOverallOption = allOptions.find((o: any) => o.isRecommended) || cheapestOption || fastestOption;
+                      const bestOverallOption = allOptions.find((o) => o.isRecommended) || cheapestOption || fastestOption;
 
                       const recommendationCardsRaw = [
                         { id: "cheapest", label: "Cheapest", option: cheapestOption, icon: IndianRupee, color: "text-emerald-500", bg: "bg-emerald-500/10" },
@@ -1329,16 +1922,16 @@ const PlanTrip = () => {
                         { id: "best", label: "Best Overall", option: bestOverallOption, icon: Star, color: "text-purple-500", bg: "bg-purple-500/10" },
                       ].filter((item) => !!item.option);
                       const seen = new Set<number>();
-                      const recommendationCards = recommendationCardsRaw.filter((item: any) => {
+                      const recommendationCards = recommendationCardsRaw.filter((item) => {
                         const key = Number(item.option?.__idx ?? -1);
                         if (seen.has(key)) return false;
                         seen.add(key);
                         return true;
                       });
 
-                      const allPrices = (plan.travelOptions || []).map((o: any) => o.price ?? o.estimatedCost ?? 0).filter((p: number) => p > 0);
+                      const allPrices = (plan.travelOptions || []).map((o) => o.price ?? o.estimatedCost ?? 0).filter((p: number) => p > 0);
                       const cheapestPrice = allPrices.length > 0 ? Math.min(...allPrices) : null;
-                      const fastestDuration = (plan.travelOptions || []).reduce((acc: string | null, o: any) => {
+                      const fastestDuration = (plan.travelOptions || []).reduce((acc: string | null, o) => {
                         if (!o.duration) return acc;
                         return acc ? acc : o.duration;
                       }, null);
@@ -1350,7 +1943,7 @@ const PlanTrip = () => {
                         return { Icon: Bus, color: '#f97316', bg: 'rgba(249,115,22,0.12)', label: 'BUS', btnClass: 'from-orange-600 to-orange-500' };
                       };
 
-                      const generateDeepLink = (opt: any) => {
+                      const generateDeepLink = (opt: NormalizedTravelOption) => {
                         const normalizedMode = opt.__normalizedMode || getNormalizedMode(opt);
                         const bookingUrl = String(opt.bookingUrl || "");
                         if (bookingUrl.startsWith("http")) {
@@ -1419,7 +2012,7 @@ const PlanTrip = () => {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                               {recommendationCards.map((rec) => {
                                 const Icon = rec.icon;
-                                const option: any = rec.option;
+                                const option = rec.option as NormalizedTravelOption;
                                 const price = option?.price ?? option?.estimatedCost;
                                 return (
                                   <button
@@ -1500,12 +2093,12 @@ const PlanTrip = () => {
 
                           {/* BOARDING PASS CARDS */}
                           <div className="space-y-5">
-                            {sortedOptions.map((opt: any, i: number) => {
+                            {sortedOptions.map((opt, i: number) => {
                               const { Icon, color, bg, label, btnClass } = getModeConfig(opt.mode, opt.__normalizedMode);
                               const price = opt.price ?? opt.estimatedCost;
                               const operatorName = opt.operator || opt.mode || 'Operator';
                               const isRecommended = opt.isRecommended || i === 0;
-                              const optionKey = Number((opt as any).id ?? i);
+                              const optionKey = Number(opt.id ?? i);
                               const isPinned = pinnedLogistics.includes(optionKey);
 
                               return (
@@ -1636,9 +2229,9 @@ const PlanTrip = () => {
                               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3">Pinned for Comparison</p>
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 {sortedOptions
-                                  .filter((opt: any, i: number) => pinnedLogistics.includes(Number((opt as any).id ?? i)))
+                                  .filter((opt, i: number) => pinnedLogistics.includes(Number(opt.id ?? i)))
                                   .slice(0, 3)
-                                  .map((opt: any, i: number) => {
+                                  .map((opt, i: number) => {
                                     const price = opt.price ?? opt.estimatedCost;
                                     return (
                                       <div key={`compare-${i}`} className="rounded-xl bg-muted/30 border border-border/40 p-3">
@@ -1666,7 +2259,7 @@ const PlanTrip = () => {
                               </div>
 
                               <div className="space-y-3">
-                                {plan.localTransport.map((item: any, i: number) => {
+                                {plan.localTransport.map((item: LocalTransportOption, i: number) => {
                                   const isBike = item.mode?.toLowerCase().includes('bike') || item.mode?.toLowerCase().includes('rapido');
                                   const isAuto = item.mode?.toLowerCase().includes('auto');
                                   const TransIcon = isBike ? Bike : Car;
@@ -1834,6 +2427,3 @@ const PlanTrip = () => {
 };
 
 export default PlanTrip;
-
-
-

@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Clock, MapPin, Utensils, Mountain, ShoppingBag, Camera, Navigation2,
-  RefreshCw, Loader2, CloudSun, Map, ExternalLink, ImageOff
+  RefreshCw, Loader2, CloudSun, Map, ExternalLink, ImageOff, Lock, Unlock,
+  ArrowUp, ArrowDown, SkipForward, Sparkles, Route, BadgeIndianRupee, Gauge
 } from "lucide-react";
 import type { TripPlan, TripDay, TripActivity } from "@/types/trip-plan";
 import InteractiveMap from "./InteractiveMap";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ItineraryDisplayProps {
   plan: TripPlan;
@@ -17,12 +19,12 @@ interface ItineraryDisplayProps {
   isReadOnly?: boolean;
 }
 
-export const generateApproximateTime = (index: number) => {
+const generateApproximateTime = (index: number) => {
   const times = ["09:00 AM", "11:30 AM", "01:00 PM", "03:00 PM", "05:30 PM", "07:30 PM"];
   return times[index % times.length];
 };
 
-export const getActivityType = (name: string, place?: string) => {
+const getActivityType = (name: string, place?: string) => {
   const text = `${name} ${place || ""}`.toLowerCase();
   if (text.includes("beach") || text.includes("coast") || text.includes("sea")) return { label: "Beach", icon: Mountain };
   if (text.includes("church") || text.includes("temple") || text.includes("cathedral") || text.includes("fort") || text.includes("monument") || text.includes("basilica")) return { label: "Landmark", icon: Mountain };
@@ -32,7 +34,7 @@ export const getActivityType = (name: string, place?: string) => {
   return { label: "Attraction", icon: Camera };
 };
 
-export const getDistanceIndicator = (index: number) => {
+const getDistanceIndicator = (index: number) => {
   if (index === 0) return null;
   const times = [10, 15, 20, 25, 30, 45, 12, 18];
   const time = times[(index * 7) % times.length];
@@ -60,9 +62,16 @@ const ItineraryDisplay = ({
   plan, activeDayIndex, regeneratingDay, isSwapping,
   onRegenerateDay, onSwapActivity, isReadOnly = false
 }: ItineraryDisplayProps) => {
+  const isMobile = useIsMobile();
   const [showRouteMap, setShowRouteMap] = useState(false);
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
   const [imageErrors, setImageErrors] = useState<Record<string, true>>({});
+  const [selectedDay, setSelectedDay] = useState(activeDayIndex);
+  const [lockedActivities, setLockedActivities] = useState<Set<string>>(new Set());
+  const [hiddenActivities, setHiddenActivities] = useState<Set<string>>(new Set());
+  const [customOrder, setCustomOrder] = useState<Record<number, number[]>>({});
+  const [compactView, setCompactView] = useState(false);
+  const [showWhyPanel, setShowWhyPanel] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (showRouteMap || !mapSectionRef.current || typeof IntersectionObserver === "undefined") return;
@@ -83,7 +92,77 @@ const ItineraryDisplay = ({
     return () => observer.disconnect();
   }, [showRouteMap]);
 
+  useEffect(() => {
+    setSelectedDay(activeDayIndex);
+  }, [activeDayIndex]);
+
+  const dayTravelSummary = useMemo(() => {
+    const cheapest = plan.travelOptions && plan.travelOptions.length
+      ? Math.min(...plan.travelOptions.map((o) => o.price ?? o.estimatedCost ?? Number.POSITIVE_INFINITY).filter(Number.isFinite))
+      : null;
+    const fastest = plan.travelOptions && plan.travelOptions.length
+      ? plan.travelOptions.reduce<string | null>((acc, o) => acc || o.duration || null, null)
+      : null;
+    return {
+      cheapest: Number.isFinite(cheapest as number) ? cheapest : null,
+      fastest,
+    };
+  }, [plan.travelOptions]);
+
+  const perDayBudget = useMemo(() => {
+    const total = Number(plan.budgetHealth?.totalEstimated || plan.budgetHealth?.userBudget || 0);
+    const days = Math.max(plan.itinerary?.length || 1, 1);
+    return total > 0 ? Math.round(total / days) : null;
+  }, [plan.budgetHealth, plan.itinerary?.length]);
+
   if (!plan.itinerary) return null;
+
+  const getPace = (activityCount: number) => {
+    if (activityCount <= 3) return { label: "Relaxed", color: "text-emerald-600 bg-emerald-500/10" };
+    if (activityCount <= 5) return { label: "Balanced", color: "text-amber-600 bg-amber-500/10" };
+    return { label: "Packed", color: "text-rose-600 bg-rose-500/10" };
+  };
+
+  const moveActivity = (dayNum: number, pos: number, dir: -1 | 1) => {
+    const day = plan.itinerary?.find((d) => d.day === dayNum);
+    if (!day?.activities) return;
+    const baseOrder = customOrder[dayNum] || day.activities.map((_, idx) => idx);
+    const next = [...baseOrder];
+    const swapTo = pos + dir;
+    if (swapTo < 0 || swapTo >= next.length) return;
+    [next[pos], next[swapTo]] = [next[swapTo], next[pos]];
+    setCustomOrder((prev) => ({ ...prev, [dayNum]: next }));
+  };
+
+  const toggleLock = (key: string) => {
+    setLockedActivities((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleSkip = (key: string) => {
+    setHiddenActivities((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const getTimeBucket = (index: number) => {
+    if (index < 2) return "Morning";
+    if (index < 4) return "Afternoon";
+    if (index < 6) return "Evening";
+    return "Night";
+  };
+
+  const scrollToDay = (dayIndex: number) => {
+    const el = document.querySelector(`[data-day-index="${dayIndex}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <div className="mt-6 space-y-7">
@@ -140,26 +219,74 @@ const ItineraryDisplay = ({
             </p>
             <p className="text-sm leading-relaxed opacity-90">
               {plan.weatherNote.toLowerCase().includes("unavailable")
-                ? "This region generally offers great sightseeing conditions. Pack for varied weather."
+                ? "Live weather could not be fetched. Practical prep: carry a light layer, sunscreen, hydration, and keep a compact rain cover for sudden changes."
                 : plan.weatherNote}
             </p>
           </div>
         </div>
       )}
 
-      <div className="sticky top-4 z-30 flex items-center justify-between rounded-xl border border-border bg-card/90 px-4 py-2.5 backdrop-blur">
-        <span className="text-sm font-medium text-foreground">
-          Day {activeDayIndex + 1} of {plan.itinerary.length}
-        </span>
-        <div className="flex gap-1.5">
-          {plan.itinerary.map((_, i) => (
-            <div
-              key={i}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                i <= activeDayIndex ? "w-6 bg-primary" : "w-2 bg-muted"
+      <div
+        className="sticky top-3 z-30 space-y-2 rounded-xl border border-border px-4 py-3 shadow-sm"
+        style={{
+          background: isMobile ? "rgba(255,255,255,0.98)" : undefined,
+          backdropFilter: isMobile ? "none" : "blur(10px)",
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-foreground">
+            Day {selectedDay + 1} of {plan.itinerary.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCompactView((v) => !v)}
+              className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-muted"
+            >
+              {compactView ? "Expanded view" : "Compact view"}
+            </button>
+            <button
+              onClick={() => onRegenerateDay(selectedDay)}
+              disabled={regeneratingDay !== null}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            >
+              {regeneratingDay === selectedDay ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              Regenerate day
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {plan.itinerary.map((d, i) => (
+            <button
+              key={d.day}
+              onClick={() => {
+                setSelectedDay(i);
+                scrollToDay(i);
+              }}
+              className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                i === selectedDay ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
               }`}
-            />
+            >
+              Day {d.day}
+            </button>
           ))}
+          <button
+            onClick={() => setShowRouteMap(true)}
+            className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground hover:text-foreground"
+          >
+            Optimize route
+          </button>
+          <button
+            onClick={() => setShowWhyPanel((prev) => ({ ...prev, [selectedDay]: !prev[selectedDay] }))}
+            className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground hover:text-foreground"
+          >
+            Why this plan?
+          </button>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent("planzo-open-budget"))}
+            className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground hover:text-foreground"
+          >
+            Adjust budget
+          </button>
         </div>
       </div>
 
@@ -211,11 +338,56 @@ const ItineraryDisplay = ({
           </div>
 
           <div className="p-4 md:p-6">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {(() => {
+                const pace = getPace(day.activities?.length || 0);
+                const effortScore = Math.min(100, 35 + (day.activities?.length || 0) * 12);
+                return (
+                  <>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${pace.color}`}>
+                      <Gauge className="h-3 w-3" /> {pace.label}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/35 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                      Effort {effortScore}/100
+                    </span>
+                    {perDayBudget && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/35 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                        <BadgeIndianRupee className="h-3 w-3" /> ~₹{perDayBudget.toLocaleString("en-IN")} / day
+                      </span>
+                    )}
+                    {dayTravelSummary.cheapest && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/35 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                        <Route className="h-3 w-3" /> From ₹{dayTravelSummary.cheapest.toLocaleString("en-IN")}
+                      </span>
+                    )}
+                    {dayTravelSummary.fastest && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/35 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                        <Clock className="h-3 w-3" /> Fastest {dayTravelSummary.fastest}
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {showWhyPanel[i] && (
+              <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                <p className="text-xs font-semibold text-primary mb-1">Why this day plan?</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Activities are sequenced for time balance, commute efficiency, and variety.
+                  The order prioritizes daytime landmarks first, then local culture and food for the evening.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-4">
-              {day.activities && Array.isArray(day.activities) && day.activities.map((activity: TripActivity | string, j: number) => {
+              {day.activities && Array.isArray(day.activities) && (customOrder[day.day] || day.activities.map((_, idx) => idx)).map((activityOriginalIndex, j) => {
+                const activity = day.activities?.[activityOriginalIndex] as TripActivity | string;
                 const isString = typeof activity === "string";
-                const activityKey = `${day.day}-${j}`;
+                const activityKey = `${day.day}-${activityOriginalIndex}`;
+                if (hiddenActivities.has(activityKey)) return null;
                 const hasImage = !isString && !!activity.image && !imageErrors[`activity-${activityKey}`];
+                const timeBucket = getTimeBucket(j);
 
                 return (
                   <motion.div
@@ -235,6 +407,9 @@ const ItineraryDisplay = ({
                     )}
 
                     <article className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+                      <div className="border-b border-border/70 px-3.5 py-2.5 md:px-4">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{timeBucket}</span>
+                      </div>
                       <div className="flex gap-3 p-3.5 md:gap-4 md:p-4">
                         {!isString && (
                           <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/25 md:h-32 md:w-32">
@@ -314,9 +489,52 @@ const ItineraryDisplay = ({
 
                         {!isReadOnly && !isString && (
                           <button
-                            onClick={() => onSwapActivity(day.day, j, activity.name || "")}
+                            onClick={() => onSwapActivity(day.day, activityOriginalIndex, activity.name || "")}
+                            disabled={lockedActivities.has(activityKey) || isSwapping === `${day.day}-${activityOriginalIndex}`}
+                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                          >
+                            {isSwapping === `${day.day}-${activityOriginalIndex}`
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <RefreshCw className="h-3.5 w-3.5" />}
+                            Swap
+                          </button>
+                        )}
+                        {!isReadOnly && (
+                          <>
+                            <button
+                              onClick={() => moveActivity(day.day, j, -1)}
+                              disabled={j === 0}
+                              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                            >
+                              <ArrowUp className="h-3.5 w-3.5" /> Move up
+                            </button>
+                            <button
+                              onClick={() => moveActivity(day.day, j, 1)}
+                              disabled={j === (day.activities?.length || 1) - 1}
+                              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                            >
+                              <ArrowDown className="h-3.5 w-3.5" /> Move down
+                            </button>
+                            <button
+                              onClick={() => toggleSkip(activityKey)}
+                              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                            >
+                              <SkipForward className="h-3.5 w-3.5" /> Skip
+                            </button>
+                            <button
+                              onClick={() => toggleLock(activityKey)}
+                              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted md:ml-auto"
+                            >
+                              {lockedActivities.has(activityKey) ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+                              {lockedActivities.has(activityKey) ? "Locked" : "Lock"}
+                            </button>
+                          </>
+                        )}
+                        {!isReadOnly && !isString && (
+                          <button
+                            onClick={() => onSwapActivity(day.day, activityOriginalIndex, activity.name || "")}
                             disabled={isSwapping === `${day.day}-${j}`}
-                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 md:ml-auto"
+                            className="hidden"
                           >
                             {isSwapping === `${day.day}-${j}`
                               ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -354,6 +572,13 @@ const ItineraryDisplay = ({
               <div className="mt-4 rounded-lg border border-amber-200/70 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/20">
                 <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">Local Tip</p>
                 <p className="mt-1 text-sm leading-relaxed text-amber-900/85 dark:text-amber-100/85">{day.tips}</p>
+              </div>
+            )}
+
+            {day.userNotes && (
+              <div className="mt-4 rounded-lg border border-sky-200/70 bg-sky-50 px-4 py-3 dark:border-sky-800/40 dark:bg-sky-950/20">
+                <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">Smart Adjustment</p>
+                <p className="mt-1 text-sm leading-relaxed text-sky-900/85 dark:text-sky-100/85">{day.userNotes}</p>
               </div>
             )}
           </div>

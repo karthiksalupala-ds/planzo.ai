@@ -11,6 +11,12 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
+type MockUser = User & {
+  user_metadata: {
+    display_name: string;
+  };
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -78,18 +84,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Mock Login Bypass only when cloud auth is unavailable.
     if (!hasSupabaseConfig && normalizedEmail === "test@planzo.ai" && password === "password") {
-      const mockUser = {
+      const mockUser: MockUser = {
         id: "mock-user-123",
         email: "test@planzo.ai",
         user_metadata: { display_name: "Test Traveler" },
         aud: "authenticated",
         role: "authenticated",
         created_at: new Date().toISOString()
-      } as any;
+      } as MockUser;
       
       localStorage.setItem("planzo_mock_user", JSON.stringify(mockUser));
       setUser(mockUser);
-      setSession({ user: mockUser, access_token: "mock-token" } as any);
+      setSession({
+        user: mockUser,
+        access_token: "mock-token",
+        refresh_token: "mock-refresh",
+        expires_in: 3600,
+        token_type: "bearer",
+      } as Session);
       return { error: null };
     }
 

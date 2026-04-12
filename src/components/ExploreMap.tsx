@@ -14,6 +14,8 @@ interface ExploreMapProps {
   }[];
 }
 
+type ExploreDestination = ExploreMapProps["destinations"][number];
+
 const mapContainerStyle = {
   width: '100%',
   height: '100%',
@@ -49,7 +51,7 @@ const premiumMapStyles = [
 const libraries: ("places")[] = ["places"];
 
 const ExploreMap: React.FC<ExploreMapProps> = ({ destinations }) => {
-  const [selectedDest, setSelectedDest] = useState<any>(null);
+  const [selectedDest, setSelectedDest] = useState<ExploreDestination | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [searchResult, setSearchResult] = useState<google.maps.places.Autocomplete | null>(null);
   const navigate = useNavigate();
@@ -83,7 +85,7 @@ const ExploreMap: React.FC<ExploreMapProps> = ({ destinations }) => {
     }
   };
 
-  const onSelect = useCallback((dest: any) => {
+  const onSelect = useCallback((dest: ExploreDestination) => {
     setSelectedDest(dest);
     if (map) {
       map.panTo({ lat: dest.lat, lng: dest.lng });
@@ -208,4 +210,3 @@ const ExploreMap: React.FC<ExploreMapProps> = ({ destinations }) => {
 };
 
 export default ExploreMap;
-

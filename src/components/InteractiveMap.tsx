@@ -25,14 +25,22 @@ const premiumMapStyles = [
 const libraries: ("places")[] = ["places"];
 const MAX_DIRECTIONS_WAYPOINTS = 23;
 
+interface MapPoint {
+  lat: number;
+  lng: number;
+  title: string;
+  day: number;
+  place: string;
+}
+
 const isValidCoordinate = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
-  const [selectedPoint, setSelectedPoint] = useState<any>(null);
+  const [selectedPoint, setSelectedPoint] = useState<MapPoint | null>(null);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [directionsNotice, setDirectionsNotice] = useState<string | null>(null);
-  const [travelMode, setTravelMode] = useState<google.maps.TravelMode>(window.google?.maps.TravelMode.DRIVING || 'DRIVING' as any);
+  const [travelMode, setTravelMode] = useState<google.maps.TravelMode>("DRIVING" as google.maps.TravelMode);
   
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -41,7 +49,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
   });
 
   const points = useMemo(() => {
-    const activityPoints: { lat: number, lng: number, title: string, day: number, place: string }[] = [];
+    const activityPoints: MapPoint[] = [];
 
     plan.itinerary?.forEach((day: TripDay) => {
       day.activities?.forEach((act: TripActivity | string) => {
@@ -121,28 +129,45 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
     );
   }, [isLoaded, points, travelMode]);
 
-  const onSelect = useCallback((point: any) => {
+  const onSelect = useCallback((point: MapPoint) => {
     setSelectedPoint(point);
   }, []);
 
   if (loadError) {
     return (
       <div className="w-full mt-6 mb-8 h-[450px] rounded-3xl overflow-hidden shadow-elevated border border-border/50 bg-card relative">
-        <div className="absolute inset-0 bg-muted/40 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-12 text-center">
-          <div className="h-16 w-16 rounded-2xl bg-white shadow-xl flex items-center justify-center mb-6 ring-4 ring-primary/5">
-            <Map className="h-8 w-8 text-primary/40" />
+        {plan.map?.embedUrl ? (
+          <div className="h-full w-full relative">
+            <iframe
+              title={`Map fallback for ${plan.destination || "trip"}`}
+              src={plan.map.embedUrl}
+              className="h-full w-full"
+              style={{ border: 0 }}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              allowFullScreen
+            />
+            <div className="absolute top-4 right-4 rounded-xl bg-card/90 backdrop-blur px-3 py-2 border border-border text-[10px] font-semibold text-muted-foreground">
+              Interactive route unavailable - showing map preview
+            </div>
           </div>
-          <h3 className="font-display font-bold text-xl text-foreground mb-2">Interactive Travel Map</h3>
-          <p className="text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
-            Live route mapping is currently in preview mode. You can still access full turn-by-turn directions via the Google Maps link for this trip.
-          </p>
-          <button 
-            onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(plan.destination)}`, '_blank')}
-            className="mt-6 px-6 py-2.5 rounded-xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-all"
-          >
-            Open in Google Maps
-          </button>
-        </div>
+        ) : (
+          <div className="absolute inset-0 bg-muted/40 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-12 text-center">
+            <div className="h-16 w-16 rounded-2xl bg-white shadow-xl flex items-center justify-center mb-6 ring-4 ring-primary/5">
+              <Map className="h-8 w-8 text-primary/40" />
+            </div>
+            <h3 className="font-display font-bold text-xl text-foreground mb-2">Interactive Travel Map</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
+              Live route mapping is currently unavailable. You can still access full turn-by-turn directions via Google Maps.
+            </p>
+            <button 
+              onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(plan.destination || "")}`, '_blank')}
+              className="mt-6 px-6 py-2.5 rounded-xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+            >
+              Open in Google Maps
+            </button>
+          </div>
+        )}
         <div className="absolute inset-0 grayscale opacity-20 pointer-events-none bg-[url('https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=2000')] bg-cover bg-center" />
       </div>
     );
@@ -159,7 +184,31 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
     );
   }
 
-  if (points.length === 0) return null;
+  if (points.length === 0) {
+    return (
+      <div className="w-full mt-6 mb-8 h-[450px] rounded-3xl overflow-hidden shadow-elevated border border-border/50 bg-card relative">
+        {plan.map?.embedUrl ? (
+          <iframe
+            title={`Map preview for ${plan.destination || "trip"}`}
+            src={plan.map.embedUrl}
+            className="h-full w-full"
+            style={{ border: 0 }}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            allowFullScreen
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-muted/20 p-8 text-center">
+            <div>
+              <Map className="h-8 w-8 text-primary/50 mx-auto mb-3" />
+              <p className="text-sm font-semibold text-foreground">Map preview not available yet</p>
+              <p className="text-xs text-muted-foreground mt-1">Generate or refresh itinerary to load route points.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full mt-6 mb-8 rounded-3xl overflow-hidden shadow-elevated border border-border/50 bg-card relative">
@@ -279,4 +328,3 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
 };
 
 export default InteractiveMap;
-

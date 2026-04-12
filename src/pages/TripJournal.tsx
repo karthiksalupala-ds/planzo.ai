@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -49,14 +49,7 @@ const TripJournal = () => {
   const [isGeneratingAIText, setIsGeneratingAIText] = useState(false);
   const [showStory, setShowStory] = useState(false);
 
-  useEffect(() => {
-    const init = async () => {
-      await fetchTripAndEntries();
-    };
-    init();
-  }, [tripId, user]);
-
-  const fetchTripAndEntries = async () => {
+  const fetchTripAndEntries = useCallback(async () => {
     if (!tripId || !user) { setLoading(false); return; }
 
     const { data: trip } = await supabase
@@ -80,7 +73,11 @@ const TripJournal = () => {
     }
 
     setLoading(false);
-  };
+  }, [tripId, user]);
+
+  useEffect(() => {
+    void fetchTripAndEntries();
+  }, [fetchTripAndEntries]);
 
   const saveEntries = (updated: JournalEntry[]) => {
     setEntries(updated);

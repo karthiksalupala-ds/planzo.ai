@@ -16,8 +16,11 @@ const BottomNav = () => {
   const { user } = useAuth();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-border md:hidden">
-      <div className="flex items-center justify-around py-2 px-4">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 md:hidden">
+      <div
+        className="flex items-center justify-around px-4 py-2"
+        style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+      >
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;
           return (

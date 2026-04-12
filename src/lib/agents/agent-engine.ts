@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { TripPlan, TripDay } from "@/types/trip-plan";
+import type { Json } from "@/integrations/supabase/types";
 
 /**
  * The AgentEngine is responsible for autonomous task execution and monitoring.
@@ -66,7 +67,7 @@ export class AgentEngine {
       // Update the remote state autonomously
       const { error } = await supabase
         .from("saved_trips")
-        .update({ plan_data: updatedPlan as any })
+        .update({ plan_data: updatedPlan as unknown as Json })
         .eq("id", tripId);
 
       if (error) throw error;

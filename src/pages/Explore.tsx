@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, MapPin, Star, IndianRupee, X, SortAsc, TrendingUp, ArrowUpDown, Heart, Sparkles, Loader2, Brain, RefreshCw, Wand2 } from "lucide-react";
@@ -18,6 +18,25 @@ const sortOptions = [
   { label: "Price (Low–High)", value: "price_asc" },
   { label: "Price (High–Low)", value: "price_desc" },
 ];
+
+interface AIDestination {
+  id: string;
+  name: string;
+  state?: string;
+  rating: number;
+  tag: string;
+  price: string;
+  days: string;
+  category: string;
+  description: string;
+  bestTime: string;
+  highlights: string[];
+  lat: number;
+  lng: number;
+  foodSpots: string[];
+  activities: string[];
+  image?: string;
+}
 
 const Explore = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -60,14 +79,14 @@ const Explore = () => {
       return 0;
     });
 
-  const updateAiDestination = (id: string, updater: (dest: any) => any) => {
-    const existingAI = JSON.parse(localStorage.getItem("planzo_ai_destinations") || "[]");
-    const updated = existingAI.map((dest: any) => (dest.id === id ? updater(dest) : dest));
+  const updateAiDestination = useCallback((id: string, updater: (dest: AIDestination) => AIDestination) => {
+    const existingAI = JSON.parse(localStorage.getItem("planzo_ai_destinations") || "[]") as AIDestination[];
+    const updated = existingAI.map((dest) => (dest.id === id ? updater(dest) : dest));
     localStorage.setItem("planzo_ai_destinations", JSON.stringify(updated));
     setRefreshKey((prev) => prev + 1);
-  };
+  }, []);
 
-  const regenerateAiImage = async (dest: any) => {
+  const regenerateAiImage = async (dest: AIDestination) => {
     if (!dest?.id || regeneratingImageId) return;
     setRegeneratingImageId(dest.id);
     try {
@@ -84,7 +103,7 @@ const Explore = () => {
     }
   };
 
-  const regenerateAiSummary = async (dest: any) => {
+  const regenerateAiSummary = async (dest: AIDestination) => {
     const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
     if (!dest?.id || !apiKey || regeneratingSummaryId) return;
     setRegeneratingSummaryId(dest.id);
@@ -119,7 +138,7 @@ const Explore = () => {
     }
   };
 
-  const handleGenerateCard = async () => {
+  const handleGenerateCard = useCallback(async () => {
     if (!searchQuery.trim() || isGenerating) return;
 
     // Use the built-in OpenRouter key so travelers don't have to provide their own
@@ -195,13 +214,13 @@ const Explore = () => {
       if (!resp.ok) throw new Error("AI research failed");
 
       const data = await resp.json();
-      const newDest = JSON.parse(data.choices[0].message.content);
+      const newDest = JSON.parse(data.choices[0].message.content) as AIDestination;
 
       // Combine AI metadata with real Pexels image
       newDest.image = imageUrl;
       if (!newDest.id.includes("-ai")) newDest.id = `${newDest.id}-ai`;
 
-      const existingAI = JSON.parse(localStorage.getItem("planzo_ai_destinations") || "[]");
+      const existingAI = JSON.parse(localStorage.getItem("planzo_ai_destinations") || "[]") as AIDestination[];
       localStorage.setItem("planzo_ai_destinations", JSON.stringify([newDest, ...existingAI]));
 
       setSearchQuery("");
@@ -214,7 +233,7 @@ const Explore = () => {
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, [isGenerating, navigate, searchQuery, toast]);
 
   // Auto-trigger AI research when no static results found
   useEffect(() => {
@@ -224,7 +243,7 @@ const Explore = () => {
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [searchQuery, filtered.length, isGenerating]);
+  }, [filtered.length, handleGenerateCard, isGenerating, searchQuery]);
 
   useEffect(() => {
     const t = setTimeout(() => setShowSkeletons(false), 300);

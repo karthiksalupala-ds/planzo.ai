@@ -16,6 +16,15 @@ interface Review {
   date: string;
 }
 
+const parseStoredJson = <T,>(value: string | null, fallback: T): T => {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+};
+
 const DestinationDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -31,16 +40,9 @@ const DestinationDetail = () => {
 
   useEffect(() => {
     if (!id) return;
-    // Load reviews from localStorage
-    const stored = localStorage.getItem(`reviews_${id}`);
-    if (stored) {
-      try { setReviews(JSON.parse(stored)); } catch {}
-    }
-    // Check wishlist
-    try {
-      const wl = JSON.parse(localStorage.getItem("planzo_wishlist") || "[]");
-      setIsWishlisted(wl.includes(id));
-    } catch {}
+    setReviews(parseStoredJson<Review[]>(localStorage.getItem(`reviews_${id}`), []));
+    const wishlist = parseStoredJson<string[]>(localStorage.getItem("planzo_wishlist"), []);
+    setIsWishlisted(wishlist.includes(id));
   }, [id]);
 
   const handleSubmitReview = () => {
@@ -66,13 +68,12 @@ const DestinationDetail = () => {
   };
 
   const toggleWishlist = () => {
-    try {
-      const wl = JSON.parse(localStorage.getItem("planzo_wishlist") || "[]");
-      const updated = isWishlisted ? wl.filter((w: string) => w !== id) : [...wl, id];
-      localStorage.setItem("planzo_wishlist", JSON.stringify(updated));
-      setIsWishlisted(!isWishlisted);
-      toast({ title: isWishlisted ? "Removed from wishlist" : "Added to wishlist ♡" });
-    } catch {}
+    if (!id) return;
+    const wishlist = parseStoredJson<string[]>(localStorage.getItem("planzo_wishlist"), []);
+    const updated = isWishlisted ? wishlist.filter((w) => w !== id) : [...wishlist, id];
+    localStorage.setItem("planzo_wishlist", JSON.stringify(updated));
+    setIsWishlisted(!isWishlisted);
+    toast({ title: isWishlisted ? "Removed from wishlist" : "Added to wishlist ♡" });
   };
 
   const avgRating = reviews.length > 0
