@@ -1,7 +1,8 @@
 import type PptxGenJSType from "pptxgenjs";
 import type { TripPlan, TripActivity } from "@/types/trip-plan";
 
-const PRIMARY = "6366f1";
+const MAX_ACTIVITIES_PER_SLIDE = 6;
+const MAX_SAFETY_TIPS_PER_SLIDE = 6;
 const PRIMARY_DARK = "4f46e5";
 const WHITE = "FFFFFF";
 const DARK_TEXT = "1e293b";
@@ -100,7 +101,7 @@ export async function generateTripPPT(plan: TripPlan, destination: string): Prom
 
       // Activities
       if (day.activities && day.activities.length > 0) {
-        day.activities.slice(0, 6).forEach((act: TripActivity | string, j: number) => {
+        day.activities.slice(0, MAX_ACTIVITIES_PER_SLIDE).forEach((act: TripActivity | string, j: number) => {
           const label =
             typeof act === "string"
               ? act
@@ -219,7 +220,7 @@ export async function generateTripPPT(plan: TripPlan, destination: string): Prom
 
     addSlideHeader(safety, prs, "🛡 Safety Tips");
 
-    plan.safetyTips.slice(0, 6).forEach((tip, i) => {
+    plan.safetyTips.slice(0, MAX_SAFETY_TIPS_PER_SLIDE).forEach((tip, i) => {
       safety.addText(`⚠️  ${tip}`, {
         x: 0.5, y: 1.25 + i * 0.65, w: "88%", h: 0.55,
         fontSize: 13, color: "92400e", fontFace: "Segoe UI", wrap: true,

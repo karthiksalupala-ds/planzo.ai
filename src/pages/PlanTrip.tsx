@@ -365,7 +365,8 @@ const PlanTrip = () => {
     toast({ title: "Generating PPT...", description: "Your itinerary is being exported as a presentation." });
     try {
       await generateTripPPT(plan, destination);
-    } catch {
+    } catch (error) {
+      console.error("PPT generation failed:", error);
       toast({ title: "Export failed", description: "Could not generate the presentation. Please try again.", variant: "destructive" });
     }
   };
