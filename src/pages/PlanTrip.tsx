@@ -25,6 +25,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import TripCountdown from "@/components/TripCountdown";
 import { downloadTripICS, openGoogleCalendar } from "@/lib/calendar";
 import TravelMode from "@/components/TravelMode";
+import { generateTripPPT } from "@/lib/tripPPT";
 
 interface Message {
   text: string;
@@ -357,6 +358,16 @@ const PlanTrip = () => {
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const },
     };
     html2pdf().set(opt).from(pdfRef.current).save();
+  };
+
+  const handleDownloadPPT = async () => {
+    if (!plan) return;
+    toast({ title: "Generating PPT...", description: "Your itinerary is being exported as a presentation." });
+    try {
+      await generateTripPPT(plan, destination);
+    } catch {
+      toast({ title: "Export failed", description: "Could not generate the presentation. Please try again.", variant: "destructive" });
+    }
   };
 
   const regeneratePlan = async (destination: string) => {
@@ -1030,6 +1041,9 @@ const PlanTrip = () => {
                         <button onClick={handleShareTrip} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white transition-colors hover:bg-white/20">
                           <Share2 className="h-4 w-4" />
                         </button>
+                        <button onClick={handleDownloadPPT} title="Download PPT" className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white transition-colors hover:bg-white/20">
+                          <Download className="h-4 w-4" />
+                        </button>
                         <button
                           onClick={isOwner ? handleSaveTrip : isGuest ? () => navigate("/auth") : handleSaveTrip}
                           disabled={saving}
@@ -1065,6 +1079,9 @@ const PlanTrip = () => {
                       </button>
                       <button onClick={handleShareTrip} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-slate-800 transition-colors hover:bg-muted dark:text-slate-100">
                         <Share2 className="h-4 w-4" />
+                      </button>
+                      <button onClick={handleDownloadPPT} title="Download PPT" className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-slate-800 transition-colors hover:bg-muted dark:text-slate-100">
+                        <Download className="h-4 w-4" />
                       </button>
                       <button onClick={handleSaveTrip} disabled={saving} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:brightness-110 disabled:opacity-60">
                         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save trip
