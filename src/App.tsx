@@ -18,6 +18,7 @@ import DestinationDetail from "./pages/DestinationDetail";
 import TripExpenses from "./pages/TripExpenses";
 import TripJournal from "./pages/TripJournal";
 import NotFound from "./pages/NotFound";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +47,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
+          <SpeedInsights />
         </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>
