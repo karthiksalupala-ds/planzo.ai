@@ -346,8 +346,6 @@ const PlanTrip = () => {
   };
 
   const invokePlanTrip = async (payload: unknown) => {
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`;
-    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
     const {
       data: { session: initialSession },
     } = await supabase.auth.getSession();
@@ -375,40 +373,59 @@ const PlanTrip = () => {
     }
 
     const callPlanTrip = async (accessToken: string) => {
-      return fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": anonKey,
-          "Authorization": `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(payload),
+      supabase.functions.setAuth(accessToken);
+      const { data, error } = await supabase.functions.invoke("plan-trip", {
+        body: payload,
       });
+
+      const context = (error as { context?: Response } | null)?.context;
+      let status = context?.status ?? null;
+      let message = error?.message ?? null;
+
+      if (context) {
+        try {
+          const body = await context.clone().json();
+          message = body?.error || body?.message || message;
+        } catch {
+          try {
+            const text = await context.clone().text();
+            if (text) message = text;
+          } catch {
+            // Ignore parse failures and fall back to SDK message.
+          }
+        }
+      }
+
+      return { data, status, message };
     };
 
-    let response = await callPlanTrip(currentSession.access_token);
+    const { data: firstRefreshData } = await supabase.auth.refreshSession();
+    const firstToken = firstRefreshData.session?.access_token || currentSession.access_token;
+
+    let result = await callPlanTrip(firstToken);
 
     // Retry once with a freshly refreshed token when Supabase returns 401.
-    if (response.status === 401) {
-      const { data: refreshData } = await supabase.auth.refreshSession();
-      const refreshedToken = refreshData.session?.access_token;
-      if (refreshedToken) {
-        response = await callPlanTrip(refreshedToken);
+    if (result.status === 401) {
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (!refreshError && refreshData.session?.access_token) {
+        result = await callPlanTrip(refreshData.session.access_token);
       }
     }
 
-    if (!response.ok) {
-      if (response.status === 401) {
+    if (result.status && result.status >= 400) {
+      if (result.status === 401) {
         await supabase.auth.signOut();
         navigate("/auth");
-        throw new Error("Unauthorized request. Please sign in again.");
+        throw new Error(result.message || "Unauthorized request. Please sign in again.");
       }
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Server error: ${response.status}`);
+      throw new Error(result.message || `Server error: ${result.status}`);
     }
 
-    const data = await response.json();
-    return data;
+    if (result.message) {
+      throw new Error(result.message);
+    }
+
+    return result.data;
   };
 
   const { toast } = useToast();

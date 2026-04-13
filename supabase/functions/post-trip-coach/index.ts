@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") || "https://planzo.ai,https://planzoai.vercel.app,http://localhost:8080,http://localhost:5173")
   .split(",")
@@ -18,43 +17,11 @@ const buildCorsHeaders = (origin: string | null) => ({
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 });
 
-async function requireAuthenticatedUser(req: Request) {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return { error: "Missing bearer token" };
-  }
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return { error: "Supabase runtime environment is not configured" };
-  }
-
-  const token = authHeader.replace("Bearer ", "");
-  const client = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-
-  const { data, error } = await client.auth.getUser(token);
-  if (error || !data?.user) {
-    return { error: "Unauthorized" };
-  }
-
-  return { user: data.user };
-}
 
 serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req.headers.get("origin"));
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
-  }
-
-  const authResult = await requireAuthenticatedUser(req);
-  if (authResult.error) {
-    return new Response(JSON.stringify({ error: authResult.error }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   }
 
   try {

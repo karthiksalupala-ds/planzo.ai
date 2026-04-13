@@ -4,6 +4,14 @@ import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+const SUPABASE_REF = (() => {
+  try {
+    return new URL(SUPABASE_URL).hostname.split('.')[0] || 'default';
+  } catch {
+    return 'default';
+  }
+})();
+const AUTH_STORAGE_KEY = `sb-${SUPABASE_REF}-auth-token`;
 
 export const hasSupabaseConfig =
   SUPABASE_URL.startsWith('http') && SUPABASE_PUBLISHABLE_KEY.length > 20;
@@ -27,8 +35,10 @@ export const supabase = hasSupabaseConfig
   ? createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
       auth: {
         storage: localStorage,
+        storageKey: AUTH_STORAGE_KEY,
         persistSession: true,
         autoRefreshToken: true,
+        detectSessionInUrl: true,
       }
     })
   : createMissingConfigClient();

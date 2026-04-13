@@ -269,8 +269,13 @@ const PlanTrip = () => {
     try {
       // Get the current session for a valid JWT token
       const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+if (!session) {
+  console.error("❌ No session. Login again.");
+  return;
+}
+
+      const token = session.access_token;
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`, {
         method: "POST",
         headers: {

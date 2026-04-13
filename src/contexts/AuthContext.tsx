@@ -45,7 +45,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.access_token) {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError || !userData?.user) {
+          // Broken token in local storage (commonly "invalid jwt"); clear it proactively.
+          await supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+      }
+
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -74,7 +86,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           data: { display_name: displayName || "Traveler" },
         },
       });
-      return { error: error?.message ?? null };
+      if (!error) return { error: null };
+      const suffix = [error.status ? `status ${error.status}` : null, error.code ? `code ${error.code}` : null]
+        .filter(Boolean)
+        .join(", ");
+      return { error: suffix ? `${error.message} (${suffix})` : error.message };
     } catch (err) {
       return { error: err instanceof Error ? err.message : "Sign up failed. Please check your network and Supabase configuration." };
     }
@@ -110,7 +126,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
-      return { error: error?.message ?? null };
+      if (!error) return { error: null };
+      const suffix = [error.status ? `status ${error.status}` : null, error.code ? `code ${error.code}` : null]
+        .filter(Boolean)
+        .join(", ");
+      return { error: suffix ? `${error.message} (${suffix})` : error.message };
     } catch (err) {
       return { error: err instanceof Error ? err.message : "Sign in failed. Please check your network and Supabase configuration." };
     }

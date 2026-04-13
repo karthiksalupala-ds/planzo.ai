@@ -1,6 +1,5 @@
 // @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") || "https://planzo.ai,https://planzoai.vercel.app,http://localhost:8080,http://localhost:5173")
   .split(",")
@@ -19,30 +18,38 @@ const buildCorsHeaders = (origin: string | null) => ({
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 });
 
-async function requireAuthenticatedUser(req: Request) {
-  const authHeader = req.headers.get("Authorization");
+const validateBearerToken = async (req: Request) => {
+  const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return { error: "Missing bearer token" };
+    return { ok: false as const, status: 401, message: "Missing authorization token" };
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return { error: "Supabase runtime environment is not configured" };
+  const token = authHeader.replace("Bearer ", "").trim();
+  if (!token) {
+    return { ok: false as const, status: 401, message: "Invalid authorization token" };
   }
 
-  const token = authHeader.replace("Bearer ", "");
-  const client = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+
+  if (!supabaseUrl || !anonKey) {
+    return { ok: false as const, status: 500, message: "Auth validation is not configured" };
+  }
+
+  const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: anonKey,
+    },
   });
 
-  const { data, error } = await client.auth.getUser(token);
-  if (error || !data?.user) {
-    return { error: "Unauthorized" };
+  if (!userRes.ok) {
+    return { ok: false as const, status: 401, message: "Unauthorized request. Please sign in again." };
   }
 
-  return { user: data.user };
-}
+  return { ok: true as const };
+};
+
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface TripRequest {
@@ -584,15 +591,15 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const authResult = await requireAuthenticatedUser(req);
-  if (authResult.error) {
-    return new Response(JSON.stringify({ error: authResult.error }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
   try {
+    const authCheck = await validateBearerToken(req);
+    if (!authCheck.ok) {
+      return new Response(JSON.stringify({ error: authCheck.message }), {
+        status: authCheck.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const body: RegenerateRequestBody = await req.json();
 
     // New logic for regenerating a single day

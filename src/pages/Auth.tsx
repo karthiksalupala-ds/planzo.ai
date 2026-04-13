@@ -10,10 +10,13 @@ import { buildAuthRedirectUrl } from "@/lib/auth-redirect";
 const friendlyAuthError = (msg: string) => {
   if (!msg) return "Something went wrong. Please try again.";
   const lower = msg.toLowerCase();
+  if (lower.includes("redirect") && lower.includes("allow")) return "Auth redirect URL is not allowed in Supabase settings. Add your current app URL under Authentication > URL Configuration.";
+  if (lower.includes("redirect") && lower.includes("invalid")) return "Auth redirect URL is invalid in Supabase settings. Check Authentication > URL Configuration.";
   if (lower.includes("invalid login")) return "Incorrect credentials or account not verified. Check your email inbox/spam for verification, then try again.";
   if (lower.includes("email not confirmed")) return "Please check your email and confirm your account to sign in.";
   if (lower.includes("invalid credentials")) return "Incorrect credentials or account not verified. Check your email inbox/spam for verification, then try again.";
   if (lower.includes("already registered")) return "An account with this email already exists. Try signing in.";
+  if (lower.includes("password") && lower.includes("6")) return "Password must be at least 6 characters.";
   if (lower.includes("weak password")) return "Password must be at least 6 characters.";
   if (lower.includes("rate limit")) return "Too many attempts. Please wait a moment.";
   return msg;
