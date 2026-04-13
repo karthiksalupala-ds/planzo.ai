@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Clock, MapPin, Utensils, Mountain, ShoppingBag, Camera, Navigation2,
-  RefreshCw, Loader2, CloudSun, Map, ExternalLink, ImageOff, Lock, Unlock,
-  ArrowUp, ArrowDown, SkipForward, Sparkles, Route, BadgeIndianRupee, Gauge
+  RefreshCw, Loader2, CloudSun, ExternalLink, ImageOff, Lock, Unlock,
+  ArrowUp, ArrowDown, SkipForward, Sparkles, BadgeIndianRupee, Gauge
 } from "lucide-react";
 import type { TripPlan, TripDay, TripActivity } from "@/types/trip-plan";
-import InteractiveMap from "./InteractiveMap";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ItineraryDisplayProps {
@@ -63,8 +62,6 @@ const ItineraryDisplay = ({
   onRegenerateDay, onSwapActivity, isReadOnly = false
 }: ItineraryDisplayProps) => {
   const isMobile = useIsMobile();
-  const [showRouteMap, setShowRouteMap] = useState(false);
-  const mapSectionRef = useRef<HTMLDivElement | null>(null);
   const [imageErrors, setImageErrors] = useState<Record<string, true>>({});
   const [selectedDay, setSelectedDay] = useState(activeDayIndex);
   const [lockedActivities, setLockedActivities] = useState<Set<string>>(new Set());
@@ -72,25 +69,6 @@ const ItineraryDisplay = ({
   const [customOrder, setCustomOrder] = useState<Record<number, number[]>>({});
   const [compactView, setCompactView] = useState(false);
   const [showWhyPanel, setShowWhyPanel] = useState<Record<number, boolean>>({});
-
-  useEffect(() => {
-    if (showRouteMap || !mapSectionRef.current || typeof IntersectionObserver === "undefined") return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (entry?.isIntersecting) {
-          setShowRouteMap(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "200px 0px" }
-    );
-
-    observer.observe(mapSectionRef.current);
-
-    return () => observer.disconnect();
-  }, [showRouteMap]);
 
   useEffect(() => {
     setSelectedDay(activeDayIndex);
@@ -167,39 +145,6 @@ const ItineraryDisplay = ({
   return (
     <div className="mt-6 space-y-7">
 
-      <div ref={mapSectionRef} className="space-y-3">
-        <div className="flex items-center justify-between px-0.5">
-          <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Map className="h-3.5 w-3.5 text-primary" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Route Map</h3>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">{plan.itinerary.length} days</span>
-            <button
-              type="button"
-              onClick={() => setShowRouteMap((prev) => !prev)}
-              className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-            >
-              {showRouteMap ? "Hide Map" : "Load Map"}
-            </button>
-          </div>
-        </div>
-        {showRouteMap ? (
-          <div className="h-[280px] md:h-[360px] overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-            <InteractiveMap plan={plan} />
-          </div>
-        ) : (
-          <div className="flex h-[220px] items-center justify-center rounded-2xl border border-border bg-muted/20 px-6 text-center md:h-[240px]">
-            <div>
-              <p className="text-sm font-semibold text-foreground">Route map is paused for faster loading.</p>
-              <p className="mt-1 text-xs text-muted-foreground">Tap "Load Map" when you want interactive directions.</p>
-            </div>
-          </div>
-        )}
-      </div>
-
       {plan.weatherNote && (
         <div className={`flex items-start gap-3 rounded-xl border px-4 py-3.5 text-sm ${
           plan.weatherNote.toLowerCase().includes("rain")
@@ -269,12 +214,6 @@ const ItineraryDisplay = ({
               Day {d.day}
             </button>
           ))}
-          <button
-            onClick={() => setShowRouteMap(true)}
-            className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground hover:text-foreground"
-          >
-            Optimize route
-          </button>
           <button
             onClick={() => setShowWhyPanel((prev) => ({ ...prev, [selectedDay]: !prev[selectedDay] }))}
             className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground hover:text-foreground"
@@ -357,7 +296,7 @@ const ItineraryDisplay = ({
                     )}
                     {dayTravelSummary.cheapest && (
                       <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/35 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                        <Route className="h-3 w-3" /> From ₹{dayTravelSummary.cheapest.toLocaleString("en-IN")}
+                        <MapPin className="h-3 w-3" /> From ₹{dayTravelSummary.cheapest.toLocaleString("en-IN")}
                       </span>
                     )}
                     {dayTravelSummary.fastest && (

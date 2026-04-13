@@ -17,7 +17,6 @@ import Chatbot from "@/components/Chatbot";
 import TripPDF from "@/components/TripPDF";
 import type { LocalTransportOption, TripActivity, TripDay, TripPlan, TravelOption } from "@/types/trip-plan";
 import { getPexelsImage, isFallbackOrMissing } from "@/lib/pexels";
-import InteractiveMap from "@/components/InteractiveMap";
 import ItineraryDisplay from "@/components/ItineraryDisplay";
 import { generateAlternativeActivity } from "@/lib/stream-ai";
 import { getAllDestinations } from "@/data/destinations";
@@ -199,7 +198,6 @@ const PlanTrip = () => {
   const [showMobileMap, setShowMobileMap] = useState(false);
   const [showTravelMode, setShowTravelMode] = useState(false);
   const [logisticsTab, setLogisticsTab] = useState<"all" | "flights" | "trains" | "buses">("all");
-  const [useInteractiveMap, setUseInteractiveMap] = useState(false);
   const [logisticsSortBy, setLogisticsSortBy] = useState<"recommended" | "price" | "duration" | "departure">("recommended");
   const [pinnedLogistics, setPinnedLogistics] = useState<number[]>([]);
   const [packingChecked, setPackingChecked] = useState<Set<number>>(new Set());
@@ -447,6 +445,11 @@ const PlanTrip = () => {
     "Adventure": { color: "rgb(244, 63, 94)", glow: "rgba(244, 63, 94, 0.4)", bg: "bg-rose-500" },
   };
   const activeConfig = vibeConfig[vibe] || vibeConfig["Standard"];
+
+  // Debug: Log chat state changes
+  useEffect(() => {
+    console.log("Chat state changed - isChatOpen:", isChatOpen, "plan exists:", !!plan);
+  }, [isChatOpen, plan]);
 
   useEffect(() => {
     if (tripId) {
@@ -813,19 +816,21 @@ const PlanTrip = () => {
       start_date: startDate || null,
       status: "planned",
     };
-    const request = tripId
-      ? supabase.from("saved_trips").update(payload).eq("id", tripId).select().single()
-      : supabase.from("saved_trips").insert(payload).select().single();
-    const { data, error } = await request;
+
+    const nextTripId = tripId || crypto.randomUUID();
+    const { error } = tripId
+      ? await supabase.from("saved_trips").update(payload).eq("id", tripId)
+      : await supabase.from("saved_trips").insert({ id: nextTripId, ...payload });
+
     setSaving(false);
     if (error) {
       toast({ title: "Save failed", description: error.message, variant: "destructive" });
-    } else if (data) {
-      setTripId(data.id);
-      setTripOwnerId(data.user_id);
-      setSearchParams({ id: data.id }, { replace: true });
-      await ensureOwnerCollaborator(data.id);
-      await loadSharedTripData(data.id);
+    } else {
+      setTripId(nextTripId);
+      setTripOwnerId(user.id);
+      setSearchParams({ id: nextTripId }, { replace: true });
+      await ensureOwnerCollaborator(nextTripId);
+      await loadSharedTripData(nextTripId);
       toast({
         title: tripId ? "Trip updated" : "Trip saved!",
         description: tripId
@@ -1534,7 +1539,7 @@ const PlanTrip = () => {
           <motion.div 
             initial={{ opacity: 0, y: 20 }} 
             animate={{ opacity: 1, y: 0 }} 
-            className="mt-8 pb-40 md:pb-0"
+            className="mt-8 pb-[calc(12rem+env(safe-area-inset-bottom))] md:pb-0"
           >
             {/* Mobile-only Back Button */}
             <div className="mb-6 md:hidden px-4">
@@ -1643,7 +1648,7 @@ const PlanTrip = () => {
             {/* Content Tabs */}
             <div className="space-y-6">
               <div
-                className="sticky top-0 z-50 w-full overflow-x-auto border-b border-border bg-white py-2 shadow-sm md:static md:w-fit md:mx-auto md:max-w-none md:translate-x-0 md:overflow-visible md:bg-muted/40 md:p-1 md:shadow-none md:border-none"
+                className="relative w-full overflow-x-auto border-b border-border bg-white py-2 shadow-sm md:static md:w-fit md:mx-auto md:max-w-none md:translate-x-0 md:overflow-visible md:bg-muted/40 md:p-1 md:shadow-none md:border-none"
                 style={{
                   backdropFilter: "none",
                 }}
@@ -1767,34 +1772,24 @@ const PlanTrip = () => {
                         : `https://www.openstreetmap.org/export/embed.html?bbox=72.7%2C15.2%2C74.5%2C16.4&layer=mapnik&marker=15.5%2C73.8`;
                     return (
                       <div className="bg-card rounded-3xl border border-border/50 shadow-elevated overflow-hidden h-[600px] relative">
-                        {useInteractiveMap && (hasMapCoords || plan?.itinerary?.some((day: TripDay) => day?.activities?.some((activity: TripActivity | string) => typeof activity !== "string" && typeof activity?.lat === "number" && typeof activity?.lng === "number"))) ? (
-                          <InteractiveMap plan={plan} />
-                        ) : (
-                          <iframe
-                            title={`Map fallback for ${plan.destination || destination}`}
-                            src={hasMapCoords ? osmEmbed : fallbackEmbed}
-                            className="h-full w-full"
-                            style={{ border: 0 }}
-                            loading="lazy"
-                            referrerPolicy="no-referrer-when-downgrade"
-                            allowFullScreen
-                          />
-                        )}
+                        <iframe
+                          title={`Map preview for ${plan.destination || destination}`}
+                          src={hasMapCoords ? osmEmbed : fallbackEmbed}
+                          className="h-full w-full"
+                          style={{ border: 0 }}
+                          loading="lazy"
+                          referrerPolicy="no-referrer-when-downgrade"
+                          allowFullScreen
+                        />
                         <div className="absolute bottom-6 left-6 right-6 pointer-events-none">
                           <div className="bg-card/90 backdrop-blur-xl p-4 rounded-2xl shadow-lg border border-border inline-block pointer-events-auto">
                             <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                              {useInteractiveMap ? "Click markers to see details" : "Map preview mode (stable fallback)"}
+                              Map preview mode
                             </p>
                             <p className="text-[10px] text-muted-foreground mt-0.5">
-                              {useInteractiveMap ? "Real-time road paths calculated via Google Directions API" : "If interactive map fails, keep preview mode for reliable rendering."}
+                              Stable route preview for itinerary stops.
                             </p>
                             <div className="mt-2 flex items-center gap-2">
-                              <button
-                                onClick={() => setUseInteractiveMap((prev) => !prev)}
-                                className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-[10px] font-semibold text-foreground hover:bg-muted transition-colors"
-                              >
-                                {useInteractiveMap ? "Use stable preview" : "Try interactive map"}
-                              </button>
                               <button
                                 onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(plan.destination || destination)}`, "_blank")}
                                 className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-[10px] font-semibold text-foreground hover:bg-muted transition-colors"
@@ -1920,11 +1915,85 @@ const PlanTrip = () => {
                         return "bus";
                       };
 
-                      const normalizedOptions: NormalizedTravelOption[] = (plan.travelOptions || []).map((o, idx) => ({
+                      const rawOptions: NormalizedTravelOption[] = (plan.travelOptions || []).map((o, idx) => ({
                         ...o,
                         __idx: idx,
                         __normalizedMode: getNormalizedMode(o),
                       }));
+
+                      const fallbackTransportOptions: NormalizedTravelOption[] = [];
+                      const basePrice = rawOptions.length
+                        ? Math.min(...rawOptions.map((o) => o.price ?? o.estimatedCost ?? Number.POSITIVE_INFINITY))
+                        : 1200;
+                      const toCity = (plan.destination || destination || "Destination").split(",")[0].trim();
+
+                      if (rawOptions.length < 4) {
+                        if (!rawOptions.some((o) => o.__normalizedMode === "flight")) {
+                          fallbackTransportOptions.push({
+                            __idx: 10001,
+                            __normalizedMode: "flight",
+                            mode: "Flight",
+                            operator: "IndiGo",
+                            from: "Your city",
+                            to: toCity,
+                            duration: "1h 45m",
+                            price: Math.round(basePrice * 1.8),
+                            estimatedCost: Math.round(basePrice * 1.8),
+                            departureTime: "07:15",
+                            arrivalTime: "09:00",
+                            type: "Economy",
+                            amenities: ["Cabin Bag", "Web Check-in"],
+                            policy: "Non-Refundable",
+                            availability: 18,
+                            rating: 4.2,
+                            isRecommended: false,
+                          });
+                        }
+                        if (!rawOptions.some((o) => o.__normalizedMode === "train")) {
+                          fallbackTransportOptions.push({
+                            __idx: 10002,
+                            __normalizedMode: "train",
+                            mode: "Train",
+                            operator: "IRCTC",
+                            from: "Your city",
+                            to: toCity,
+                            duration: "8h 30m",
+                            price: Math.round(basePrice * 0.7),
+                            estimatedCost: Math.round(basePrice * 0.7),
+                            departureTime: "21:30",
+                            arrivalTime: "06:00",
+                            type: "3A",
+                            amenities: ["Sleeper", "Charging Port"],
+                            policy: "Partially Refundable",
+                            availability: 42,
+                            rating: 4.0,
+                            isRecommended: false,
+                          });
+                        }
+                        if (!rawOptions.some((o) => o.__normalizedMode === "bus")) {
+                          fallbackTransportOptions.push({
+                            __idx: 10003,
+                            __normalizedMode: "bus",
+                            mode: "Bus",
+                            operator: "RedBus",
+                            from: "Your city",
+                            to: toCity,
+                            duration: "10h 15m",
+                            price: Math.round(basePrice * 0.5),
+                            estimatedCost: Math.round(basePrice * 0.5),
+                            departureTime: "22:00",
+                            arrivalTime: "08:15",
+                            type: "AC Sleeper",
+                            amenities: ["AC", "Live Tracking"],
+                            policy: "Partially Refundable",
+                            availability: 14,
+                            rating: 3.9,
+                            isRecommended: false,
+                          });
+                        }
+                      }
+
+                      const normalizedOptions: NormalizedTravelOption[] = [...rawOptions, ...fallbackTransportOptions];
 
                       const flights = normalizedOptions.filter((o) => o.__normalizedMode === 'flight');
                       const trains = normalizedOptions.filter((o) => o.__normalizedMode === 'train');
@@ -1993,9 +2062,9 @@ const PlanTrip = () => {
                         return true;
                       });
 
-                      const allPrices = (plan.travelOptions || []).map((o) => o.price ?? o.estimatedCost ?? 0).filter((p: number) => p > 0);
+                      const allPrices = normalizedOptions.map((o) => o.price ?? o.estimatedCost ?? 0).filter((p: number) => p > 0);
                       const cheapestPrice = allPrices.length > 0 ? Math.min(...allPrices) : null;
-                      const fastestDuration = (plan.travelOptions || []).reduce((acc: string | null, o) => {
+                      const fastestDuration = normalizedOptions.reduce((acc: string | null, o) => {
                         if (!o.duration) return acc;
                         return acc ? acc : o.duration;
                       }, null);
@@ -2009,26 +2078,25 @@ const PlanTrip = () => {
 
                       const generateDeepLink = (opt: NormalizedTravelOption) => {
                         const normalizedMode = opt.__normalizedMode || getNormalizedMode(opt);
-                        const bookingUrl = String(opt.bookingUrl || "");
-                        if (bookingUrl.startsWith("http")) {
-                          const lowerUrl = bookingUrl.toLowerCase();
-                          const isFlightLink = /(indigo|airindia|spicejet|makemytrip.*flight|cleartrip|skyscanner|goibibo)/.test(lowerUrl);
-                          const isRailLink = /(irctc|rail|train|makemytrip.*rail)/.test(lowerUrl);
-                          const isBusLink = /(redbus|abhibus|bus)/.test(lowerUrl);
-                          if ((normalizedMode === "flight" && isFlightLink) || (normalizedMode === "train" && isRailLink) || (normalizedMode === "bus" && isBusLink)) {
-                            return bookingUrl;
-                          }
+                        const operator = String(opt.operator || "").toLowerCase();
+                        const toDest = encodeURIComponent((opt.to || plan.destination || "India").split(",")[0].trim());
+
+                        if (normalizedMode === "flight") {
+                          if (operator.includes("indigo")) return "https://www.goindigo.in/";
+                          if (operator.includes("air india")) return "https://www.airindia.com/";
+                          if (operator.includes("spicejet")) return "https://www.spicejet.com/";
+                          return `https://www.makemytrip.com/flights/?destination=${toDest}`;
                         }
-                        
-                        const m = normalizedMode;
-                        const toDest = (opt.to || plan.destination || '').split(',')[0].trim().toLowerCase();
-                        const dateObj = startDate ? new Date(startDate) : new Date();
-                        const yymm = dateObj.toISOString().substring(2, 7).replace('-', '');
-                        
-                        if (m.includes('flight')) return `https://www.skyscanner.co.in/transport/flights/any/${toDest}?oym=${yymm}`;
-                        if (m.includes('train')) return `https://www.makemytrip.com/railways/`;
-                        if (m.includes('bus')) return `https://www.redbus.in/buses/${toDest}-tickets`;
-                        return `https://www.google.com/search?q=book+${opt.mode}+to+${toDest}`;
+
+                        if (normalizedMode === "train") {
+                          return "https://www.irctc.co.in/nget/train-search";
+                        }
+
+                        if (normalizedMode === "bus") {
+                          return `https://www.redbus.in/`;
+                        }
+
+                        return `https://www.google.com/search?q=${encodeURIComponent(`book ${opt.mode || "transport"} to ${opt.to || plan.destination || "destination"}`)}`;
                       };
 
 

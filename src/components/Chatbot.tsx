@@ -3,6 +3,7 @@ import { Send, X, Sparkles, User, Trash2, Maximize2, Minimize2 } from 'lucide-re
 import { motion, AnimatePresence } from 'framer-motion';
 import { streamChatResponse } from '@/lib/stream-ai';
 import type { TripPlan } from '@/types/trip-plan';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Message {
   text: string;
@@ -17,6 +18,7 @@ interface ChatbotProps {
 }
 
 const Chatbot = ({ plan, onClose, messages, setMessages }: ChatbotProps) => {
+  const isMobile = useIsMobile();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -76,11 +78,13 @@ const Chatbot = ({ plan, onClose, messages, setMessages }: ChatbotProps) => {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 20, scale: 0.95 }}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
       transition={{ type: "spring", damping: 25, stiffness: 200 }}
-      className={`fixed bottom-24 right-5 ${isExpanded ? 'w-[calc(100vw-40px)] md:w-[500px] h-[600px]' : 'w-80 md:w-96 h-[500px]'} bg-card/95 backdrop-blur-xl shadow-2xl rounded-3xl flex flex-col z-50 border border-primary/10 overflow-hidden ring-1 ring-white/20`}
+      className={`fixed right-5 z-50 bg-card/95 backdrop-blur-xl shadow-2xl rounded-3xl flex flex-col border border-primary/10 overflow-hidden ring-1 ring-white/20 ${isExpanded ? 'w-[calc(100vw-40px)] md:w-[500px] h-[600px]' : 'w-80 md:w-96 h-[500px]'}`}
+      style={{ bottom: isMobile ? "calc(7.25rem + env(safe-area-inset-bottom))" : "24px" }}
+      onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
       <div className="p-4 flex items-center justify-between border-b border-primary/5 bg-primary/5">

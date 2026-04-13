@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow, DirectionsRenderer } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, InfoWindow, Polyline, Circle } from '@react-google-maps/api';
 import type { TripPlan, TripDay, TripActivity } from '@/types/trip-plan';
-import { MapPin, Loader2, Navigation, Clock, Info, Map } from 'lucide-react';
+import { Loader2, Navigation, Clock, Info, Map } from 'lucide-react';
 
 interface InteractiveMapProps {
   plan: TripPlan;
@@ -23,7 +23,6 @@ const premiumMapStyles = [
 ];
 
 const libraries: ("places")[] = ["places"];
-const MAX_DIRECTIONS_WAYPOINTS = 23;
 
 interface MapPoint {
   lat: number;
@@ -38,9 +37,7 @@ const isValidCoordinate = (value: unknown): value is number =>
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
   const [selectedPoint, setSelectedPoint] = useState<MapPoint | null>(null);
-  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
-  const [directionsNotice, setDirectionsNotice] = useState<string | null>(null);
-  const [travelMode, setTravelMode] = useState<google.maps.TravelMode>("DRIVING" as google.maps.TravelMode);
+  const [routeNotice, setRouteNotice] = useState<string | null>(null);
   
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -86,48 +83,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
 
   useEffect(() => {
     if (!isLoaded) return;
-
     if (points.length <= 1) {
-      setDirections(null);
-      setDirectionsNotice(null);
+      setRouteNotice(null);
       return;
     }
 
-    const waypointCount = points.length - 2;
-    if (waypointCount > MAX_DIRECTIONS_WAYPOINTS) {
-      setDirections(null);
-      setDirectionsNotice(`Showing markers only: this route has ${points.length} stops, which exceeds the map routing limit.`);
-      return;
-    }
-
-    const directionsService = new google.maps.DirectionsService();
-    const origin = points[0];
-    const destination = points[points.length - 1];
-    const waypoints = points.slice(1, -1).map((p) => ({
-      location: { lat: p.lat, lng: p.lng },
-      stopover: true
-    }));
-
-    directionsService.route(
-      {
-        origin: { lat: origin.lat, lng: origin.lng },
-        destination: { lat: destination.lat, lng: destination.lng },
-        waypoints,
-        travelMode,
-      },
-      (result, status) => {
-        if (status === google.maps.DirectionsStatus.OK && result) {
-          setDirections(result);
-          setDirectionsNotice(null);
-          return;
-        }
-
-        setDirections(null);
-        setDirectionsNotice('Could not calculate a full route right now. Showing markers instead.');
-        console.error(`Directions request failed: ${status}`);
-      }
-    );
-  }, [isLoaded, points, travelMode]);
+    setRouteNotice('Showing direct path between itinerary stops.');
+  }, [isLoaded, points]);
 
   const onSelect = useCallback((point: MapPoint) => {
     setSelectedPoint(point);
@@ -224,27 +186,15 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
           </div>
         </div>
 
-        <div className="bg-card/90 backdrop-blur-xl p-1 rounded-2xl shadow-lg border border-border flex items-center gap-1 pointer-events-auto self-start">
-          {(['DRIVING', 'WALKING', 'TRANSIT'] as const).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setTravelMode(google.maps.TravelMode[mode])}
-              className={`px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all uppercase tracking-wider ${
-                travelMode === google.maps.TravelMode[mode]
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "hover:bg-muted text-muted-foreground"
-              }`}
-            >
-              {mode.charAt(0) + mode.slice(1).toLowerCase()}
-            </button>
-          ))}
+        <div className="bg-card/90 backdrop-blur-xl px-3 py-2 rounded-2xl shadow-lg border border-border pointer-events-auto self-start">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Legacy-free route view</span>
         </div>
       </div>
 
-      {directionsNotice && (
+      {routeNotice && (
         <div className="absolute top-24 left-4 right-4 z-[10] pointer-events-none">
           <div className="bg-amber-50/95 dark:bg-amber-950/80 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-[11px] font-medium px-3 py-2 rounded-xl shadow-sm">
-            {directionsNotice}
+            {routeNotice}
           </div>
         </div>
       )}
@@ -266,42 +216,35 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ plan }) => {
           }
         }}
       >
-        {directions ? (
-          <DirectionsRenderer
-            directions={directions}
+        {points.length > 1 && (
+          <Polyline
+            path={points.map((p) => ({ lat: p.lat, lng: p.lng }))}
             options={{
-              suppressMarkers: false,
-              polylineOptions: {
-                strokeColor: "#10b981",
-                strokeWeight: 5,
-                strokeOpacity: 0.7
-              }
+              strokeColor: "#10b981",
+              strokeWeight: 4,
+              strokeOpacity: 0.75,
+              geodesic: true,
             }}
           />
-        ) : (
-          points.map((point, i) => (
-            <Marker
-              key={i}
-              position={{ lat: point.lat, lng: point.lng }}
-              onClick={() => onSelect(point)}
-              label={{
-                text: `${point.day}`,
-                color: 'white',
-                fontSize: '10px',
-                fontWeight: 'bold'
-              }}
-              icon={{
-                path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                scale: 5,
-                fillColor: '#6366f1',
-                fillOpacity: 1,
-                strokeWeight: 1,
-                strokeColor: '#ffffff',
-                rotation: 90
-              }}
-            />
-          ))
         )}
+
+        {points.map((point, i) => (
+          <Circle
+            key={i}
+            center={{ lat: point.lat, lng: point.lng }}
+            radius={120}
+            onClick={() => onSelect(point)}
+            options={{
+              fillColor: '#6366f1',
+              fillOpacity: 0.92,
+              strokeColor: '#ffffff',
+              strokeOpacity: 0.95,
+              strokeWeight: 2,
+              clickable: true,
+              zIndex: 20,
+            }}
+          />
+        ))}
 
         {selectedPoint && (
           <InfoWindow
