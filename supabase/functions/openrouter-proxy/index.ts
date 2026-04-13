@@ -160,7 +160,12 @@ Important rules:
 - Give clear, helpful travel advice.
 - If data is unavailable, explain it naturally.
 - Use a conversational tone similar to ChatGPT or Claude.
-- Keep answers concise but informative (3-5 sentences).`
+- Format responses in clean markdown with short sections and bullet points when helpful.
+- Prefer this response style:
+  - One short opening line.
+  - 2-4 bullets with specific recommendations.
+  - Optional "Next step" line for actionable advice.
+- Keep answers concise but informative (about 80-180 words unless user asks for more).`
             },
             ...(body.planContext ? [{ role: "system", content: `Here is the current trip plan for context:\n${body.planContext}` }] : []),
             { role: "user", content: body.query || "" },

@@ -1,1 +1,7 @@
 project_id = "hnhdpjvcvlmjtfhmcqkf"
+
+[functions.openrouter-proxy]
+verify_jwt = false
+
+[functions.post-trip-coach]
+verify_jwt = false

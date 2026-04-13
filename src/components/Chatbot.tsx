@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { streamChatResponse } from '@/lib/stream-ai';
 import type { TripPlan } from '@/types/trip-plan';
 import { useIsMobile } from '@/hooks/use-mobile';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   text: string;
@@ -143,7 +145,30 @@ const Chatbot = ({ plan, onClose, messages, setMessages }: ChatbotProps) => {
                       ? 'gradient-hero text-white rounded-tr-none shadow-md shadow-primary/10' 
                       : 'bg-white border border-primary/5 text-foreground rounded-tl-none font-medium'
                   }`}>
-                    {msg.text || (
+                    {msg.text ? (
+                      msg.isUser ? (
+                        msg.text
+                      ) : (
+                        <div className="space-y-2 text-[13px] leading-6">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                              ul: ({ children }) => <ul className="list-disc pl-5 space-y-1">{children}</ul>,
+                              ol: ({ children }) => <ol className="list-decimal pl-5 space-y-1">{children}</ol>,
+                              li: ({ children }) => <li>{children}</li>,
+                              h1: ({ children }) => <h3 className="text-sm font-bold mb-2">{children}</h3>,
+                              h2: ({ children }) => <h4 className="text-sm font-bold mb-2">{children}</h4>,
+                              h3: ({ children }) => <h5 className="text-sm font-semibold mb-1">{children}</h5>,
+                              strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                              code: ({ children }) => <code className="px-1 py-0.5 rounded bg-primary/10 text-[12px]">{children}</code>,
+                            }}
+                          >
+                            {msg.text}
+                          </ReactMarkdown>
+                        </div>
+                      )
+                    ) : (
                       <div className="flex gap-1 py-1">
                         <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
                         <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.15s]"></span>

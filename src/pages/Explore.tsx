@@ -11,6 +11,7 @@ import { getDestinationFallbackImage } from "@/lib/imageFallbacks";
 import DestinationCardSkeleton from "@/components/DestinationCardSkeleton";
 import { prefetchImage } from "@/lib/prefetch";
 import { supabase } from "@/integrations/supabase/client";
+import { postOpenRouterProxy } from "@/lib/stream-ai";
 
 const filterTags = ["All", "Culture", "Beach", "Nature", "Adventure", "Romantic"];
 const sortOptions = [
@@ -108,22 +109,11 @@ const Explore = () => {
     if (!dest?.id || regeneratingSummaryId) return;
     setRegeneratingSummaryId(dest.id);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error("Please sign in to refresh AI summaries.");
-
-      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/openrouter-proxy`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          action: "regenerateSummary",
-          destination: dest.name,
-          state: dest.state,
-          category: dest.category,
-        }),
+      const resp = await postOpenRouterProxy({
+        action: "regenerateSummary",
+        destination: dest.name,
+        state: dest.state,
+        category: dest.category,
       });
       if (!resp.ok) throw new Error("summary failed");
       const data = await resp.json();
@@ -145,9 +135,6 @@ const Explore = () => {
     toast({ title: "✨ AI is Researching", description: `Uncovering secrets of "${searchQuery}"...`, duration: 3000 });
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error("Please sign in to use AI research.");
-
       // 1. Fetch real imagery from Pexels first or concurrent
       const imageUrl = await getPexelsImage(searchQuery, {
         context: "destination",
@@ -155,17 +142,9 @@ const Explore = () => {
       });
 
       // 2. Fetch metadata from AI
-      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/openrouter-proxy`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          action: "searchDestination",
-          query: searchQuery,
-        })
+      const resp = await postOpenRouterProxy({
+        action: "searchDestination",
+        query: searchQuery,
       });
 
       if (!resp.ok) throw new Error("AI research failed");

@@ -144,6 +144,30 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
   throw new Error("Max retries reached");
 }
 
+function getSupabaseFunctionKey(): string {
+  const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!publishableKey) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  return publishableKey;
+}
+
+export async function postOpenRouterProxy(body: Record<string, unknown>): Promise<Response> {
+  const functionKey = getSupabaseFunctionKey();
+
+  return fetchWithRetry(OPENROUTER_PROXY_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: functionKey,
+      Authorization: `Bearer ${functionKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
 export interface ChatParams {
   query: string;
   planContext?: string;
@@ -161,24 +185,10 @@ export async function streamChatResponse({
   onError: (error: string) => void;
 }) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      onError("Please sign in to use the AI assistant.");
-      return;
-    }
-
-    const resp = await fetchWithRetry(OPENROUTER_PROXY_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        action: "chat",
-        query: params.query,
-        planContext: params.planContext,
-      }),
+    const resp = await postOpenRouterProxy({
+      action: "chat",
+      query: params.query,
+      planContext: params.planContext,
     });
 
     if (!resp.ok) {
@@ -243,22 +253,11 @@ export async function generateAlternativeActivity(
   oldActivityName: string
 ): Promise<{ name: string; place: string; imageSearchQuery: string } | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return null;
-
-    const resp = await fetchWithRetry(OPENROUTER_PROXY_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        action: "alternativeActivity",
-        destination,
-        mood,
-        oldActivityName,
-      }),
+    const resp = await postOpenRouterProxy({
+      action: "alternativeActivity",
+      destination,
+      mood,
+      oldActivityName,
     });
 
     if (!resp.ok) return null;
