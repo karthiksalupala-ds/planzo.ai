@@ -1263,7 +1263,7 @@ const PlanTrip = () => {
                             onChange={(e) => handleDestinationChangeWithSuggest(index, e.target.value)}
                             onKeyDown={handleDestinationKeyDown}
                             onBlur={() => setTimeout(() => { setSuggestions([]); setAutocompleteIndex(null); }, 150)}
-                            placeholder={index === 0 ? 'Where to? (e.g. Kyoto, Japan)' : 'Next destination...'}
+                            placeholder={index === 0 ? 'Where to? (e.g. goa, hyderabad)' : 'Next destination...'}
                             className="w-full bg-slate-100/40 rounded-2xl px-5 py-3.5 text-sm md:text-base text-slate-900 outline-none placeholder:text-slate-400 focus:ring-4 transition-all font-bold border border-slate-200/60 group-hover:bg-slate-100/80 group-focus-within:border-transparent group-focus-within:bg-white overflow-hidden shadow-inner"
                             style={{ 
                               '--tw-ring-color': activeConfig.glow,
