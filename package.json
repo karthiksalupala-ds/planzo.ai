@@ -45,6 +45,7 @@
     "@react-google-maps/api": "^2.20.8",
     "@supabase/supabase-js": "^2.95.3",
     "@tanstack/react-query": "^5.83.0",
+    "@vercel/speed-insights": "^2.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
