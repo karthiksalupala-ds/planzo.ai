@@ -374,15 +374,28 @@ const PlanTrip = () => {
       throw new Error("Your session expired. Please sign in again.");
     }
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": anonKey,
-        "Authorization": `Bearer ${currentSession.access_token}`,
-      },
-      body: JSON.stringify(payload),
-    });
+    const callPlanTrip = async (accessToken: string) => {
+      return fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": anonKey,
+          "Authorization": `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+    };
+
+    let response = await callPlanTrip(currentSession.access_token);
+
+    // Retry once with a freshly refreshed token when Supabase returns 401.
+    if (response.status === 401) {
+      const { data: refreshData } = await supabase.auth.refreshSession();
+      const refreshedToken = refreshData.session?.access_token;
+      if (refreshedToken) {
+        response = await callPlanTrip(refreshedToken);
+      }
+    }
 
     if (!response.ok) {
       if (response.status === 401) {
