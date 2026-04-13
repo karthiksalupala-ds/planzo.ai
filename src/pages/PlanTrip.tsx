@@ -435,40 +435,6 @@ const PlanTrip = () => {
   }, [tripId]);
 
   useEffect(() => {
-    if (!tripId) {
-      setCollaborators([]);
-      setTripMessages([]);
-      setTripVotes([]);
-      setPriceWatches([]);
-      return;
-    }
-
-    void loadSharedTripData(tripId);
-    if (user?.id && tripOwnerId === user.id) {
-      void ensureOwnerCollaborator(tripId);
-    }
-
-    const channel = supabase.channel(`trip-social-${tripId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "trip_collaborators", filter: `trip_id=eq.${tripId}` }, () => {
-        void loadSharedTripData(tripId);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "trip_messages", filter: `trip_id=eq.${tripId}` }, () => {
-        void loadSharedTripData(tripId);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "trip_votes", filter: `trip_id=eq.${tripId}` }, () => {
-        void loadSharedTripData(tripId);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "trip_price_watches", filter: `trip_id=eq.${tripId}` }, () => {
-        void loadSharedTripData(tripId);
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [ensureOwnerCollaborator, loadSharedTripData, tripId, tripOwnerId, user?.id]);
-
-  useEffect(() => {
     if (!tripId) return;
     const title = plan?.destination || destination || "Trip";
     localStorage.setItem("planzo_current_trip", JSON.stringify({ id: tripId, title }));
@@ -532,6 +498,72 @@ const PlanTrip = () => {
   const activityRefs = useMemo(() => (plan ? extractPlanActivities(plan) : []), [plan]);
   const suggestedPriceWatches = useMemo(() => (plan ? getSuggestedPriceWatches(plan) : []), [plan]);
 
+  const ensureOwnerCollaborator = useCallback(async (currentTripId: string) => {
+    if (!user) return;
+    await supabase.from("trip_collaborators").upsert({
+      trip_id: currentTripId,
+      user_id: user.id,
+      email: user.email || null,
+      display_name: actorName,
+      role: "owner",
+      status: "active",
+      invited_by: user.id,
+    }, { onConflict: "trip_id,user_id" });
+  }, [actorName, user]);
+
+  const loadSharedTripData = useCallback(async (currentTripId: string) => {
+    const [
+      collaboratorsRes,
+      messagesRes,
+      votesRes,
+      watchesRes,
+    ] = await Promise.all([
+      supabase.from("trip_collaborators").select("*").eq("trip_id", currentTripId).order("created_at", { ascending: true }),
+      supabase.from("trip_messages").select("*").eq("trip_id", currentTripId).order("created_at", { ascending: false }).limit(20),
+      supabase.from("trip_votes").select("*").eq("trip_id", currentTripId).order("created_at", { ascending: false }),
+      supabase.from("trip_price_watches").select("*").eq("trip_id", currentTripId).order("created_at", { ascending: false }),
+    ]);
+
+    if (!collaboratorsRes.error) setCollaborators(collaboratorsRes.data || []);
+    if (!messagesRes.error) setTripMessages(messagesRes.data || []);
+    if (!votesRes.error) setTripVotes(votesRes.data || []);
+    if (!watchesRes.error) setPriceWatches(watchesRes.data || []);
+  }, []);
+
+  useEffect(() => {
+    if (!tripId) {
+      setCollaborators([]);
+      setTripMessages([]);
+      setTripVotes([]);
+      setPriceWatches([]);
+      return;
+    }
+
+    void loadSharedTripData(tripId);
+    if (user?.id && tripOwnerId === user.id) {
+      void ensureOwnerCollaborator(tripId);
+    }
+
+    const channel = supabase.channel(`trip-social-${tripId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_collaborators", filter: `trip_id=eq.${tripId}` }, () => {
+        void loadSharedTripData(tripId);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_messages", filter: `trip_id=eq.${tripId}` }, () => {
+        void loadSharedTripData(tripId);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_votes", filter: `trip_id=eq.${tripId}` }, () => {
+        void loadSharedTripData(tripId);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_price_watches", filter: `trip_id=eq.${tripId}` }, () => {
+        void loadSharedTripData(tripId);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [ensureOwnerCollaborator, loadSharedTripData, tripId, tripOwnerId, user?.id]);
+
   useEffect(() => {
     if (!plan?.itinerary) return;
     const observer = new IntersectionObserver(
@@ -570,38 +602,6 @@ const PlanTrip = () => {
       setDestinations(prev => prev.filter((_, i) => i !== index));
     }
   };
-
-  const ensureOwnerCollaborator = useCallback(async (currentTripId: string) => {
-    if (!user) return;
-    await supabase.from("trip_collaborators").upsert({
-      trip_id: currentTripId,
-      user_id: user.id,
-      email: user.email || null,
-      display_name: actorName,
-      role: "owner",
-      status: "active",
-      invited_by: user.id,
-    }, { onConflict: "trip_id,user_id" });
-  }, [actorName, user]);
-
-  const loadSharedTripData = useCallback(async (currentTripId: string) => {
-    const [
-      collaboratorsRes,
-      messagesRes,
-      votesRes,
-      watchesRes,
-    ] = await Promise.all([
-      supabase.from("trip_collaborators").select("*").eq("trip_id", currentTripId).order("created_at", { ascending: true }),
-      supabase.from("trip_messages").select("*").eq("trip_id", currentTripId).order("created_at", { ascending: false }).limit(20),
-      supabase.from("trip_votes").select("*").eq("trip_id", currentTripId).order("created_at", { ascending: false }),
-      supabase.from("trip_price_watches").select("*").eq("trip_id", currentTripId).order("created_at", { ascending: false }),
-    ]);
-
-    if (!collaboratorsRes.error) setCollaborators(collaboratorsRes.data || []);
-    if (!messagesRes.error) setTripMessages(messagesRes.data || []);
-    if (!votesRes.error) setTripVotes(votesRes.data || []);
-    if (!watchesRes.error) setPriceWatches(watchesRes.data || []);
-  }, []);
 
   const handleInviteCollaborator = async ({ displayName, email }: { displayName: string; email?: string }) => {
     if (!tripId) {

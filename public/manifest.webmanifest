@@ -1,0 +1,17 @@
+{
+  "name": "Planzo.ai",
+  "short_name": "Planzo",
+  "description": "AI Travel Planner & Smart Budgeting",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/placeholder.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
