@@ -27,6 +27,10 @@ import TravelMode from "@/components/TravelMode";
 import TripCollabPanel from "@/components/TripCollabPanel";
 import PriceWatchPanel from "@/components/PriceWatchPanel";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { BudgetAnalyzer } from "@/components/BudgetAnalyzer";
+import { LogisticsIntelligence } from "@/components/LogisticsIntelligence";
+import { GroupExpenseSplitter } from "@/components/GroupExpenseSplitter";
+import { TripCollaboration } from "@/components/TripCollaboration";
 import {
   applyWeatherAdjustmentToPlan,
   extractPlanActivities,
@@ -2506,6 +2510,72 @@ const PlanTrip = () => {
                               ))}
                             </div>
                           )}
+
+                          {/* SMART LOGISTICS INTELLIGENCE */}
+                          <div className="rounded-[32px] bg-card border border-border/50 p-6">
+                            <h3 className="font-display font-bold text-slate-800 dark:text-slate-100 text-lg mb-6 flex items-center gap-2">
+                              <Zap className="h-5 w-5 text-primary" /> Smart Logistics Analysis
+                            </h3>
+                            <LogisticsIntelligence options={normalizedOptions} />
+                          </div>
+
+                          {/* BUDGET ANALYZER */}
+                          <div className="rounded-[32px] bg-card border border-border/50 p-6">
+                            <h3 className="font-display font-bold text-slate-800 dark:text-slate-100 text-lg mb-6 flex items-center gap-2">
+                              <PieChart className="h-5 w-5 text-primary" /> Budget Intelligence
+                            </h3>
+                            <BudgetAnalyzer plan={plan} budget={parseInt(budget)} days={days} travelers={travelers} />
+                          </div>
+
+                          {/* GROUP EXPENSE SPLITTER */}
+                          <div className="rounded-[32px] bg-card border border-border/50 p-6">
+                            <h3 className="font-display font-bold text-slate-800 dark:text-slate-100 text-lg mb-6 flex items-center gap-2">
+                              <Users className="h-5 w-5 text-primary" /> Group Expense Splitter
+                            </h3>
+                            <GroupExpenseSplitter 
+                              travelers={travelers} 
+                              totalBudget={parseInt(budget)} 
+                              currentSpend={plan.budgetHealth?.totalEstimated || 0}
+                            />
+                          </div>
+
+                          {/* PRICE WATCH & ALERTS */}
+                          <div className="rounded-[32px] bg-card border border-border/50 p-6">
+                            <h3 className="font-display font-bold text-slate-800 dark:text-slate-100 text-lg mb-6 flex items-center gap-2">
+                              <TrendingDown className="h-5 w-5 text-primary" /> Price Watch & Alerts
+                            </h3>
+                            <div className="space-y-4 text-sm">
+                              <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                                <div className="font-bold text-blue-900 dark:text-blue-200 mb-2">💰 Current Flight Price</div>
+                                <div className="text-2xl font-black text-blue-600">₹{plan.travelOptions?.[0]?.price || plan.travelOptions?.[0]?.estimatedCost || "N/A"}</div>
+                                <div className="text-xs text-blue-800 dark:text-blue-300 mt-2">
+                                  ✓ Prices typically drop 10-15% when booked 2-3 weeks in advance. Set a price alert below.
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <input
+                                  type="number"
+                                  placeholder="Alert price"
+                                  defaultValue={plan.travelOptions?.[0]?.price ? Math.round((plan.travelOptions[0].price || 0) * 0.9) : ""}
+                                  className="px-3 py-2 rounded-lg border border-border bg-background text-sm font-bold"
+                                />
+                                <button className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-bold text-sm hover:opacity-90 transition-all">
+                                  Set Alert
+                                </button>
+                              </div>
+                              <p className="text-xs text-muted-foreground italic">
+                                💡 AI Tip: Best booking window is 21-35 days before travel for domestic flights.
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* TRIP COLLABORATION */}
+                          <div className="rounded-[32px] bg-card border border-border/50 p-6">
+                            <h3 className="font-display font-bold text-slate-800 dark:text-slate-100 text-lg mb-6 flex items-center gap-2">
+                              <Users className="h-5 w-5 text-primary" /> Trip Collaboration & Voting
+                            </h3>
+                            <TripCollaboration />
+                          </div>
 
                         </div>
                       );
