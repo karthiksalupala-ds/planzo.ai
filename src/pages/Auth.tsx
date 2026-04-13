@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { hasSupabaseConfig, supabase, supabaseConfigError } from "@/integrations/supabase/client";
+import { buildAuthRedirectUrl } from "@/lib/auth-redirect";
 
 const friendlyAuthError = (msg: string) => {
   if (!msg) return "Something went wrong. Please try again.";
@@ -73,7 +74,7 @@ const Auth = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: buildAuthRedirectUrl(),
         },
       });
       if (error) {

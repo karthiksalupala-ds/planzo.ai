@@ -10,6 +10,7 @@ import { getPexelsImage } from "@/lib/pexels";
 import { getDestinationFallbackImage } from "@/lib/imageFallbacks";
 import DestinationCardSkeleton from "@/components/DestinationCardSkeleton";
 import { prefetchImage } from "@/lib/prefetch";
+import { supabase } from "@/integrations/supabase/client";
 
 const filterTags = ["All", "Culture", "Beach", "Nature", "Adventure", "Romantic"];
 const sortOptions = [
@@ -104,30 +105,29 @@ const Explore = () => {
   };
 
   const regenerateAiSummary = async (dest: AIDestination) => {
-    const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
-    if (!dest?.id || !apiKey || regeneratingSummaryId) return;
+    if (!dest?.id || regeneratingSummaryId) return;
     setRegeneratingSummaryId(dest.id);
     try {
-      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Please sign in to refresh AI summaries.");
+
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/openrouter-proxy`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          "HTTP-Referer": window.location.origin,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          model: "google/gemini-2.0-flash-001",
-          messages: [
-            { role: "system", content: "Write a concise 2-sentence travel destination summary in JSON: {\"description\":\"...\"}." },
-            { role: "user", content: `Destination: ${dest.name}, ${dest.state}. Category: ${dest.category}. Keep it factual and useful.` },
-          ],
-          response_format: { type: "json_object" },
+          action: "regenerateSummary",
+          destination: dest.name,
+          state: dest.state,
+          category: dest.category,
         }),
       });
       if (!resp.ok) throw new Error("summary failed");
       const data = await resp.json();
-      const parsed = JSON.parse(data.choices?.[0]?.message?.content || "{}");
-      const description = String(parsed.description || "").trim();
+      const description = String(data.description || "").trim();
       if (!description) throw new Error("empty summary");
       updateAiDestination(dest.id, (current) => ({ ...current, description }));
       toast({ title: "Summary refreshed", description: `${dest.name} summary updated.` });
@@ -141,32 +141,13 @@ const Explore = () => {
   const handleGenerateCard = useCallback(async () => {
     if (!searchQuery.trim() || isGenerating) return;
 
-    // Use the built-in OpenRouter key so travelers don't have to provide their own
-    const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
-    if (!apiKey) {
-      toast({ title: "AI Research Unavailable", description: "Admin API Key missing.", variant: "destructive" });
-      return;
-    }
-
     setIsGenerating(true);
     toast({ title: "✨ AI is Researching", description: `Uncovering secrets of "${searchQuery}"...`, duration: 3000 });
 
-    const fetchWithRetry = async (url: string, options: RequestInit, maxRetries = 3): Promise<Response> => {
-      let attempt = 0;
-      let delay = 2000;
-      while (attempt < maxRetries) {
-        const response = await fetch(url, options);
-        if (response.status !== 429) return response;
-        attempt++;
-        console.warn(`[API] Rate limited (429). Retrying attempt ${attempt} of ${maxRetries}...`);
-        if (attempt >= maxRetries) return response;
-        await new Promise(res => setTimeout(res, delay));
-        delay *= 2;
-      }
-      throw new Error("Max retries reached");
-    };
-
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Please sign in to use AI research.");
+
       // 1. Fetch real imagery from Pexels first or concurrent
       const imageUrl = await getPexelsImage(searchQuery, {
         context: "destination",
@@ -174,47 +155,23 @@ const Explore = () => {
       });
 
       // 2. Fetch metadata from AI
-      const resp = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/openrouter-proxy`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          "HTTP-Referer": window.location.origin,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          model: "google/gemini-2.0-flash-001",
-          messages: [
-            {
-              role: "system",
-              content: `You are a travel database expert. Return ONLY a valid JSON object matching this schema:
-              {
-                "id": "string-slug",
-                "name": "string",
-                "state": "string",
-                "rating": number (4.5-4.9),
-                "tag": "string",
-                "price": "string (e.g. ₹10,000)",
-                "days": "string (e.g. 3 days)",
-                "category": "Culture|Beach|Nature|Adventure|Romantic",
-                "description": "2 sentences",
-                "bestTime": "string",
-                "highlights": ["string"],
-                "lat": number,
-                "lng": number,
-                "foodSpots": ["string"],
-                "activities": ["string"]
-              }`
-            },
-            { role: "user", content: `Generate a destination card for ${searchQuery}. Focus on accurate geographical and cultural details.` }
-          ],
-          response_format: { type: "json_object" }
+          action: "searchDestination",
+          query: searchQuery,
         })
       });
 
       if (!resp.ok) throw new Error("AI research failed");
 
       const data = await resp.json();
-      const newDest = JSON.parse(data.choices[0].message.content) as AIDestination;
+      const newDest = data as AIDestination;
 
       // Combine AI metadata with real Pexels image
       newDest.image = imageUrl;

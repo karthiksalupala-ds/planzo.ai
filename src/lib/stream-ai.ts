@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { TripPlan } from "@/types/trip-plan";
 
 const PLAN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`;
+const OPENROUTER_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/openrouter-proxy`;
 
 export interface PlanTripParams {
   query: string;
@@ -143,8 +144,6 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
   throw new Error("Max retries reached");
 }
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-
 export interface ChatParams {
   query: string;
   planContext?: string;
@@ -161,59 +160,24 @@ export async function streamChatResponse({
   onDone: () => void;
   onError: (error: string) => void;
 }) {
-  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
-  if (!apiKey) {
-    onError("AI assistant temporarily unavailable.");
-    return;
-  }
-
-  const systemPrompt = `You are a friendly AI travel assistant helping users understand and explore their travel itinerary.
-
-You have access to the user's generated travel plan in JSON format. Use this information to answer questions naturally.
-
-Important rules:
-- Do NOT mention JSON fields like 'weatherNote', 'budgetBreakdown', or 'itinerary'.
-- Respond like a human travel guide.
-- Give clear, helpful travel advice.
-- If data is unavailable, explain it naturally.
-- Use a conversational tone similar to ChatGPT or Claude.
-- Keep answers concise but informative (3-5 sentences).
-
-Example:
-Bad response:
-'According to the current plan, the weatherNote is weather data temporarily unavailable.'
-
-Good response:
-'I couldn't retrieve the latest weather data right now, but Goa usually has a warm tropical climate. If you're visiting between October and February, you'll likely enjoy pleasant weather with lots of sunshine.'
-
-Always prioritize helpful travel guidance over technical explanations.`;
-
-  const messages: Array<{ role: string; content: string }> = [
-    { role: "system", content: systemPrompt },
-  ];
-
-  if (params.planContext) {
-    messages.push({
-      role: "system",
-      content: `Here is the current trip plan for context:\n${params.planContext}`,
-    });
-  }
-
-  messages.push({ role: "user", content: params.query });
-
   try {
-    const resp = await fetchWithRetry(OPENROUTER_URL, {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      onError("Please sign in to use the AI assistant.");
+      return;
+    }
+
+    const resp = await fetchWithRetry(OPENROUTER_PROXY_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
-        model: "meta-llama/llama-3-8b-instruct",
-        messages,
-        stream: true,
-        temperature: 0.7,
-        max_tokens: 300,
+        action: "chat",
+        query: params.query,
+        planContext: params.planContext,
       }),
     });
 
@@ -278,32 +242,22 @@ export async function generateAlternativeActivity(
   mood: string,
   oldActivityName: string
 ): Promise<{ name: string; place: string; imageSearchQuery: string } | null> {
-  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
-  if (!apiKey) return null;
-
-  const systemPrompt = `You are a professional travel planning AI. Return ONLY a valid JSON object matching this schema:
-{ "name": "string", "place": "string", "imageSearchQuery": "string (descriptive, for Pexels)" }
-Do not provide any markdown, just the JSON string.`;
-
-  const userPrompt = `The user is traveling to ${destination} with a mood of "${mood}".
-They do NOT want to do this activity: "${oldActivityName}".
-Suggest ONE alternative activity that is different but fits the mood and city. Return JSON strictly.`;
-
   try {
-    const resp = await fetchWithRetry(OPENROUTER_URL, {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+
+    const resp = await fetchWithRetry(OPENROUTER_PROXY_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
-        model: "meta-llama/llama-3-8b-instruct",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.8,
-        response_format: { type: "json_object" },
+        action: "alternativeActivity",
+        destination,
+        mood,
+        oldActivityName,
       }),
     });
 

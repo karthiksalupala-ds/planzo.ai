@@ -5,7 +5,7 @@ import {
   Sparkles, Send, MapPin, IndianRupee, Calendar, Users, ChevronRight,
   Hotel, Utensils, Camera, Loader2, Heart, Mountain, Palmtree, Baby,
   User, Shield, Backpack, CloudSun, AlertCircle, Save, Train, Plane, Bus, RefreshCw, Pencil, TramFront, Bike,
-  Car, Navigation, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Share2, XCircle, ShoppingBag, Printer, Download, Plus, X, Clock, Navigation2, Map, CalendarPlus, PieChart, Zap, Star, ListChecks, BellRing, IndianRupee as Rupee
+  Car, Navigation, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Share2, XCircle, ShoppingBag, Printer, Download, Plus, X, Clock, Navigation2, Map, CalendarPlus, PieChart, Zap, Star, ListChecks, BellRing, ArrowLeft, IndianRupee as Rupee
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -348,34 +348,53 @@ const PlanTrip = () => {
   const invokePlanTrip = async (payload: unknown) => {
     const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-trip`;
     const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-    // #region agent log
-    fetch('http://127.0.0.1:7664/ingest/a9dfbe62-6630-42d8-96e5-1ec8adee15ac',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c91d0'},body:JSON.stringify({sessionId:'1c91d0',runId:'pre-fix',hypothesisId:'H1',location:'PlanTrip.tsx:invokePlanTrip:entry',message:'invokePlanTrip called',data:{hasUrl:!!url,hasAnonKey:!!anonKey,anonKeyLength:anonKey?.length||0,payloadKeys:payload&&typeof payload==='object'?Object.keys(payload as Record<string, unknown>):[]},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
+    const {
+      data: { session: initialSession },
+    } = await supabase.auth.getSession();
+
+    if (!initialSession?.access_token) {
+      throw new Error("Please sign in to generate a trip plan.");
+    }
+
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData?.user) {
+      await supabase.auth.signOut();
+      navigate("/auth");
+      throw new Error("Your session expired. Please sign in again.");
+    }
+
+    // Always use the latest session token after getUser() in case a refresh happened.
+    const {
+      data: { session: currentSession },
+    } = await supabase.auth.getSession();
+
+    if (!currentSession?.access_token) {
+      await supabase.auth.signOut();
+      navigate("/auth");
+      throw new Error("Your session expired. Please sign in again.");
+    }
+
     const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "apikey": anonKey,
-        "Authorization": `Bearer ${anonKey}`,
+        "Authorization": `Bearer ${currentSession.access_token}`,
       },
       body: JSON.stringify(payload),
     });
-    // #region agent log
-    fetch('http://127.0.0.1:7664/ingest/a9dfbe62-6630-42d8-96e5-1ec8adee15ac',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c91d0'},body:JSON.stringify({sessionId:'1c91d0',runId:'pre-fix',hypothesisId:'H2',location:'PlanTrip.tsx:invokePlanTrip:afterFetch',message:'plan-trip response received',data:{status:response.status,statusText:response.statusText,ok:response.ok},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     if (!response.ok) {
+      if (response.status === 401) {
+        await supabase.auth.signOut();
+        navigate("/auth");
+        throw new Error("Unauthorized request. Please sign in again.");
+      }
       const errorData = await response.json().catch(() => ({}));
-      // #region agent log
-      fetch('http://127.0.0.1:7664/ingest/a9dfbe62-6630-42d8-96e5-1ec8adee15ac',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c91d0'},body:JSON.stringify({sessionId:'1c91d0',runId:'pre-fix',hypothesisId:'H3',location:'PlanTrip.tsx:invokePlanTrip:errorBody',message:'plan-trip non-2xx body',data:{error:errorData?.error||null,keys:errorData&&typeof errorData==='object'?Object.keys(errorData):[]},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       throw new Error(errorData.error || `Server error: ${response.status}`);
     }
 
     const data = await response.json();
-    // #region agent log
-    fetch('http://127.0.0.1:7664/ingest/a9dfbe62-6630-42d8-96e5-1ec8adee15ac',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c91d0'},body:JSON.stringify({sessionId:'1c91d0',runId:'pre-fix',hypothesisId:'H4',location:'PlanTrip.tsx:invokePlanTrip:successBody',message:'plan-trip success body',data:{hasDestination:!!data?.destination,hasItinerary:Array.isArray(data?.itinerary),itineraryLength:Array.isArray(data?.itinerary)?data.itinerary.length:null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return data;
   };
 
@@ -1482,7 +1501,23 @@ const PlanTrip = () => {
       {/* Generated Plan */}
       <AnimatePresence>
         {plan && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-8 pb-40 md:pb-0">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            className="mt-8 pb-40 md:pb-0"
+          >
+            {/* Mobile-only Back Button */}
+            <div className="mb-6 md:hidden px-4">
+              <button 
+                onClick={() => setPlan(null)}
+                className="flex items-center gap-2 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors group"
+              >
+                <div className="h-9 w-9 rounded-full border border-border bg-white flex items-center justify-center shadow-sm group-hover:bg-muted transition-colors">
+                  <ArrowLeft className="h-4 w-4" />
+                </div>
+                <span>Back to Planner</span>
+              </button>
+            </div>
             {/* Header / Summary Card */}
             <div className="mb-8 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
               {plan.destinationImage && (
@@ -1578,10 +1613,9 @@ const PlanTrip = () => {
             {/* Content Tabs */}
             <div className="space-y-6">
               <div
-                className="fixed left-1/2 z-[60] w-[94%] max-w-[420px] -translate-x-1/2 overflow-x-auto rounded-2xl border border-border bg-background/98 p-1.5 shadow-xl md:static md:w-fit md:max-w-none md:translate-x-0 md:overflow-visible md:bg-muted/40 md:p-1 md:shadow-none"
+                className="sticky top-0 z-50 w-full overflow-x-auto border-b border-border bg-white py-2 shadow-sm md:static md:w-fit md:mx-auto md:max-w-none md:translate-x-0 md:overflow-visible md:bg-muted/40 md:p-1 md:shadow-none md:border-none"
                 style={{
-                  bottom: isMobile ? "calc(5.75rem + env(safe-area-inset-bottom))" : undefined,
-                  backdropFilter: isMobile ? "none" : "blur(12px)",
+                  backdropFilter: "none",
                 }}
               >
                 <div className="flex min-w-max items-center justify-start gap-1">

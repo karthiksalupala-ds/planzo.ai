@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { hasSupabaseConfig, supabase, supabaseConfigError } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { buildAuthRedirectUrl } from "@/lib/auth-redirect";
 
 const ForgotPassword = () => {
   const [searchParams] = useSearchParams();
@@ -19,7 +20,7 @@ const ForgotPassword = () => {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: buildAuthRedirectUrl("/reset-password"),
       });
 
       if (error) throw error;
