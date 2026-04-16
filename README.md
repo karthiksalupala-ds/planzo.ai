@@ -10,7 +10,7 @@
 
 **Planzo.ai** transforms travel planning with AI-powered itineraries, real-time budget tracking, smart logistics analysis, and group expense management. Plan your dream trip in seconds, not days.
 
-[Live Demo](#-quickstart) • [Features](#-comprehensive-features) • [Installation](#-installation) • [Documentation](#-documentation)
+[Live Demo](https://planzoai.vercel.app)• [Features](#-comprehensive-features) • [Installation](#-installation) • [Documentation](#-documentation)
 
 </div>
 
