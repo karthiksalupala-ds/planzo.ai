@@ -31,6 +31,7 @@ import { BudgetAnalyzer } from "@/components/BudgetAnalyzer";
 import { LogisticsIntelligence } from "@/components/LogisticsIntelligence";
 import { GroupExpenseSplitter } from "@/components/GroupExpenseSplitter";
 import { TripCollaboration } from "@/components/TripCollaboration";
+import TripTwinSimulator, { type TripTwinScenario } from "@/components/TripTwinSimulator";
 import {
   applyWeatherAdjustmentToPlan,
   extractPlanActivities,
@@ -203,6 +204,7 @@ const PlanTrip = () => {
   const [showTravelMode, setShowTravelMode] = useState(false);
   const [logisticsTab, setLogisticsTab] = useState<"all" | "flights" | "trains" | "buses">("all");
   const [logisticsSortBy, setLogisticsSortBy] = useState<"recommended" | "price" | "duration" | "departure">("recommended");
+  const [logisticsPanel, setLogisticsPanel] = useState<"transport" | "essentials" | "insights">("transport");
   const [pinnedLogistics, setPinnedLogistics] = useState<number[]>([]);
   const [packingChecked, setPackingChecked] = useState<Set<number>>(new Set());
   const [chatMessages, setChatMessages] = useState<Message[]>([
@@ -254,6 +256,88 @@ const PlanTrip = () => {
     if (tripId) {
       await supabase.from("saved_trips").update({ plan_data: updatedPlan as unknown as Json }).eq("id", tripId);
     }
+  };
+
+  const applyTripTwinScenario = async (scenario: TripTwinScenario) => {
+    if (!plan) return;
+
+    const existingItinerary = plan.itinerary || [];
+    const currentDays = existingItinerary.length || days;
+    let nextItinerary = [...existingItinerary];
+
+    if (scenario.targetDays < currentDays) {
+      nextItinerary = nextItinerary.slice(0, scenario.targetDays);
+    } else if (scenario.targetDays > currentDays) {
+      for (let d = currentDays + 1; d <= scenario.targetDays; d++) {
+        nextItinerary.push({
+          day: d,
+          title: `Flexible Day ${d}`,
+          activities: [
+            `Explore local neighborhoods at your own pace in ${plan.destination || destination || "your destination"}`,
+            "Keep this slot open for weather-friendly alternatives",
+          ],
+          tips: "Use this day as a recovery or buffer day for smooth pacing.",
+        });
+      }
+    }
+
+    nextItinerary = nextItinerary.map((item, idx) => ({ ...item, day: idx + 1 }));
+
+    const currentTotal = Number(plan.budgetHealth?.totalEstimated || scenario.projectedSpend);
+    const ratio = currentTotal > 0 ? scenario.projectedSpend / currentTotal : 1;
+
+    const nextBreakdown = plan.budgetBreakdown
+      ? {
+          accommodation: Math.round(Number(plan.budgetBreakdown.accommodation || 0) * ratio),
+          food: Math.round(Number(plan.budgetBreakdown.food || 0) * ratio),
+          activities: Math.round(Number(plan.budgetBreakdown.activities || 0) * ratio),
+          transport: Math.round(Number(plan.budgetBreakdown.transport || 0) * ratio),
+          miscellaneous: Math.round(Number(plan.budgetBreakdown.miscellaneous || 0) * ratio),
+        }
+      : plan.budgetBreakdown;
+
+    const nextUsage = scenario.projectedBudget > 0
+      ? Math.round((scenario.projectedSpend / scenario.projectedBudget) * 100)
+      : plan.budgetHealth?.usagePercentage;
+    const remaining = scenario.projectedBudget - scenario.projectedSpend;
+
+    const nextVibe = scenario.recommendedMode === "flight"
+      ? "Premium"
+      : scenario.recommendedMode === "train"
+        ? "Budget"
+        : "Standard";
+
+    const nextPlan: TripPlan = {
+      ...plan,
+      vibe: nextVibe,
+      itinerary: nextItinerary,
+      budgetHealth: {
+        ...plan.budgetHealth,
+        userBudget: scenario.projectedBudget,
+        totalEstimated: scenario.projectedSpend,
+        usagePercentage: nextUsage,
+        remaining,
+        withinBudget: remaining >= 0,
+        status: remaining >= 0 ? "healthy" : "warning",
+      },
+      budgetBreakdown: nextBreakdown,
+      adjustments: [
+        ...(plan.adjustments || []),
+        `Trip Twin applied: ${scenario.name} (${scenario.scoreLabel}).`,
+      ],
+    };
+
+    setBudget(String(scenario.projectedBudget));
+    setDays(scenario.targetDays);
+    setTravelers(scenario.targetTravelers);
+    setVibe(nextVibe);
+    setPlan(nextPlan);
+
+    await updateRemotePlan(nextPlan);
+    toast({
+      title: "Trip Twin applied",
+      description: `${scenario.name} is now active with updated timeline and budget strategy.`,
+    });
   };
 
   const fetchClientWeatherNote = async (dest: string) => {
@@ -2112,6 +2196,28 @@ const PlanTrip = () => {
 
                       return (
                         <div className="space-y-6 pb-20">
+                          <div className="flex flex-wrap items-center gap-2 p-2 rounded-2xl bg-muted/30 border border-border/50 w-fit">
+                            {([
+                              { id: "transport", label: "Transport" },
+                              { id: "essentials", label: "Essentials" },
+                              { id: "insights", label: "Insights" },
+                            ] as const).map((item) => (
+                              <button
+                                key={item.id}
+                                onClick={() => setLogisticsPanel(item.id)}
+                                className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+                                  logisticsPanel === item.id
+                                    ? "bg-card text-slate-800 dark:text-slate-100 border border-border/50 shadow-card"
+                                    : "text-muted-foreground hover:text-slate-800 dark:hover:text-slate-100"
+                                }`}
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {logisticsPanel === "transport" && (
+                            <>
                           {/* Stats Summary Bar */}
                           <div className="grid grid-cols-3 gap-4">
                             <div className="flex items-center gap-3 p-4 bg-card rounded-2xl border border-border/50 shadow-sm">
@@ -2384,8 +2490,11 @@ const PlanTrip = () => {
                             </div>
                           )}
 
+                            </>
+                          )}
+
                           {/* ON-GROUND MOBILITY */}
-                          {plan.localTransport && plan.localTransport.length > 0 && (
+                          {logisticsPanel === "transport" && plan.localTransport && plan.localTransport.length > 0 && (
                             <div className="pt-2">
                               <div className="flex items-center gap-2 mb-5">
                                 <div className="h-8 w-8 rounded-xl flex items-center justify-center bg-primary/10">
@@ -2444,7 +2553,7 @@ const PlanTrip = () => {
                           )}
 
                           {/* SMART PACKING CHECKLIST */}
-                          {packingItems.length > 0 && (
+                          {logisticsPanel === "essentials" && packingItems.length > 0 && (
                             <div className="rounded-[32px] overflow-hidden bg-card border border-border">
                               <div className="flex items-center justify-between p-5 pb-4">
                                 <div className="flex items-center gap-2">
@@ -2494,7 +2603,7 @@ const PlanTrip = () => {
                           )}
 
                           {/* SAFETY TIPS */}
-                          {plan.safetyTips && plan.safetyTips.length > 0 && (
+                          {logisticsPanel === "essentials" && plan.safetyTips && plan.safetyTips.length > 0 && (
                             <div className="space-y-3">
                               <div className="flex items-center gap-2 mb-4">
                                 <div className="h-8 w-8 rounded-xl flex items-center justify-center bg-amber-500/10">
@@ -2512,22 +2621,39 @@ const PlanTrip = () => {
                           )}
 
                           {/* SMART LOGISTICS INTELLIGENCE */}
+                          {logisticsPanel === "insights" && (
+                            <TripTwinSimulator
+                              plan={plan}
+                              budget={parseInt(budget)}
+                              days={days}
+                              travelers={travelers}
+                              vibe={vibe}
+                              onApplyScenario={applyTripTwinScenario}
+                            />
+                          )}
+
+                          {/* SMART LOGISTICS INTELLIGENCE */}
+                          {logisticsPanel === "insights" && (
                           <div className="rounded-[32px] bg-card border border-border/50 p-6">
                             <h3 className="font-display font-bold text-slate-800 dark:text-slate-100 text-lg mb-6 flex items-center gap-2">
                               <Zap className="h-5 w-5 text-primary" /> Smart Logistics Analysis
                             </h3>
                             <LogisticsIntelligence options={normalizedOptions} />
                           </div>
+                          )}
 
                           {/* BUDGET ANALYZER */}
+                          {logisticsPanel === "insights" && (
                           <div className="rounded-[32px] bg-card border border-border/50 p-6">
                             <h3 className="font-display font-bold text-slate-800 dark:text-slate-100 text-lg mb-6 flex items-center gap-2">
                               <PieChart className="h-5 w-5 text-primary" /> Budget Intelligence
                             </h3>
                             <BudgetAnalyzer plan={plan} budget={parseInt(budget)} days={days} travelers={travelers} />
                           </div>
+                          )}
 
                           {/* GROUP EXPENSE SPLITTER */}
+                          {logisticsPanel === "insights" && (
                           <div className="rounded-[32px] bg-card border border-border/50 p-6">
                             <h3 className="font-display font-bold text-slate-800 dark:text-slate-100 text-lg mb-6 flex items-center gap-2">
                               <Users className="h-5 w-5 text-primary" /> Group Expense Splitter
@@ -2538,8 +2664,10 @@ const PlanTrip = () => {
                               currentSpend={plan.budgetHealth?.totalEstimated || 0}
                             />
                           </div>
+                          )}
 
                           {/* PRICE WATCH & ALERTS */}
+                          {logisticsPanel === "insights" && (
                           <div className="rounded-[32px] bg-card border border-border/50 p-6">
                             <h3 className="font-display font-bold text-slate-800 dark:text-slate-100 text-lg mb-6 flex items-center gap-2">
                               <TrendingDown className="h-5 w-5 text-primary" /> Price Watch & Alerts
@@ -2568,14 +2696,24 @@ const PlanTrip = () => {
                               </p>
                             </div>
                           </div>
+                          )}
 
                           {/* TRIP COLLABORATION */}
+                          {logisticsPanel === "insights" && (
                           <div className="rounded-[32px] bg-card border border-border/50 p-6">
                             <h3 className="font-display font-bold text-slate-800 dark:text-slate-100 text-lg mb-6 flex items-center gap-2">
                               <Users className="h-5 w-5 text-primary" /> Trip Collaboration & Voting
                             </h3>
                             <TripCollaboration />
                           </div>
+                          )}
+
+                          {logisticsPanel === "essentials" && (!packingItems.length && !(plan.safetyTips && plan.safetyTips.length > 0)) && (
+                            <div className="rounded-2xl border border-dashed border-border/40 bg-card p-8 text-center">
+                              <p className="text-sm font-bold text-slate-800 dark:text-slate-100">No essentials generated yet</p>
+                              <p className="text-xs text-muted-foreground mt-1">Generate or adjust your trip plan to get smart packing and safety tips.</p>
+                            </div>
+                          )}
 
                         </div>
                       );

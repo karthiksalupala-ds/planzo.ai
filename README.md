@@ -2,6 +2,10 @@
 
 <div align="center">
 
+![GitHub last commit](https://img.shields.io/github/last-commit/yourusername/planzo.ai?style=for-the-badge&label=Last%20Updated)
+![GitHub top language](https://img.shields.io/github/languages/top/yourusername/planzo.ai?style=for-the-badge&label=Language)
+![GitHub all releases](https://img.shields.io/github/downloads/yourusername/planzo.ai/total?style=for-the-badge&label=Downloads)
+
 ![Planzo.ai Banner](https://img.shields.io/badge/Planzo.ai-Smart_Travel_Planning-2563eb?style=for-the-badge)
 ![Version](https://img.shields.io/badge/Version-2.0.0-success?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
@@ -10,9 +14,93 @@
 
 **Planzo.ai** transforms travel planning with AI-powered itineraries, real-time budget tracking, smart logistics analysis, and group expense management. Plan your dream trip in seconds, not days.
 
-[Live Demo](#-quick-start) • [Features](#-comprehensive-features) • [Installation](#-installation) • [Documentation](#-documentation)
+### Build complete, shareable travel plans in under a minute
+
+From one prompt, Planzo.ai generates a day-by-day itinerary with budget intelligence, route logistics, group expense settlement, and live price watch signals. It is built for modern travelers who want less planning friction and better decisions.
+
+<p>
+  <a href="#-getting-started-in-5-minutes">Get Started in 5 Minutes</a> •
+  <a href="#-demo-in-action">Watch Demo</a> •
+  <a href="#-comprehensive-features">Explore Features</a>
+</p>
+
+[Live Demo](#-getting-started-in-5-minutes) • [Features](#-comprehensive-features) • [Installation](#-installation--setup) • [Documentation](#-documentation)
+
+[Set GitHub badges to your repo](#-github-profile-setup)
 
 </div>
+
+---
+
+## 🎬 Demo in Action
+
+> Add your GIF/MP4 assets to a folder like `docs/demo/` and update these links.
+
+| Feature | Preview |
+|--------|---------|
+| AI itinerary generation | ![AI Itinerary Demo](docs/demo/ai-itinerary.gif) |
+| Budget intelligence dashboard | ![Budget Intelligence Demo](docs/demo/budget-intelligence.gif) |
+| Group expense splitting | ![Expense Splitter Demo](docs/demo/expense-splitter.gif) |
+| Trip collaboration and voting | ![Collaboration Demo](docs/demo/collaboration.gif) |
+
+**Video walkthroughs (optional):**
+- [Full Product Tour (3-5 min)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)
+- [How AI planning works](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)
+
+---
+
+## ⚡ Getting Started in 5 Minutes
+
+### 1) Clone + Install (2 minutes)
+
+```bash
+git clone https://github.com/yourusername/planzo.ai.git
+cd planzo.ai
+npm install
+```
+
+### 2) Add Environment Variables (2 minutes)
+
+Create `.env` with minimum required keys:
+
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=your_anon_key
+VITE_OPENROUTER_API_KEY=your_openrouter_key
+```
+
+### 3) Run App + Create First Trip (1 minute)
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:5173` and create a trip with destination, budget, and duration.
+
+---
+
+## 🏷️ Topics (for GitHub Discoverability)
+
+Use these GitHub topics on your repository:
+
+`travel`, `ai`, `react`, `typescript`, `travel-planner`, `itinerary-generator`, `budget-tracker`, `supabase`, `vite`, `pwa`, `openrouter`, `group-expense-splitter`
+
+---
+
+## 🧩 GitHub Profile Setup
+
+Replace `yourusername/planzo.ai` everywhere in badge URLs with your real GitHub repository path.
+
+Recommended badges already included at the top:
+- Total downloads
+- Top language
+- Last updated (last commit)
+
+Tip: If you do not publish releases yet, switch download badge to this fallback:
+
+```md
+![Repo views](https://komarev.com/ghpvc/?username=yourusername&repo=planzo.ai&style=for-the-badge)
+```
 
 ---
 
