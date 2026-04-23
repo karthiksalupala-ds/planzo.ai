@@ -14,19 +14,7 @@
 
 **Planzo.ai** transforms travel planning with AI-powered itineraries, real-time budget tracking, smart logistics analysis, and group expense management. Plan your dream trip in seconds, not days.
 
-### Build complete, shareable travel plans in under a minute
-
-From one prompt, Planzo.ai generates a day-by-day itinerary with budget intelligence, route logistics, group expense settlement, and live price watch signals. It is built for modern travelers who want less planning friction and better decisions.
-
-<p>
-  <a href="#-getting-started-in-5-minutes">Get Started in 5 Minutes</a> •
-  <a href="#-demo-in-action">Watch Demo</a> •
-  <a href="#-comprehensive-features">Explore Features</a>
-</p>
-
-[Live Demo](#-getting-started-in-5-minutes) • [Features](#-comprehensive-features) • [Installation](#-installation--setup) • [Documentation](#-documentation)
-
-[Set GitHub badges to your repo](#-github-profile-setup)
+[Live Demo](#-quick-start) • [Features](#-comprehensive-features) • [Installation](#-installation) • [Documentation](#-documentation)
 
 </div>
 
