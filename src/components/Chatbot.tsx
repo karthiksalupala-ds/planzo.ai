@@ -19,6 +19,59 @@ interface ChatbotProps {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 }
 
+const buildPlanContext = (plan: TripPlan) => {
+  const itinerary = Array.isArray(plan.itinerary)
+    ? plan.itinerary.slice(0, 5).map((day) => ({
+        day: day.day,
+        title: day.title,
+        activities: Array.isArray(day.activities)
+          ? day.activities.slice(0, 4).map((activity) =>
+              typeof activity === 'string'
+                ? activity
+                : [activity.name, activity.place].filter(Boolean).join(' - ')
+            )
+          : [],
+        tips: day.tips,
+      }))
+    : [];
+
+  const travelOptions = Array.isArray(plan.travelOptions)
+    ? plan.travelOptions.slice(0, 3).map((option) => ({
+        mode: option.mode,
+        from: option.from,
+        to: option.to,
+        duration: option.duration,
+        price: option.price,
+        estimatedCost: option.estimatedCost,
+        isRecommended: option.isRecommended,
+      }))
+    : [];
+
+  const localTransport = Array.isArray(plan.localTransport)
+    ? plan.localTransport.slice(0, 3).map((option) => ({
+        mode: option.mode,
+        estimatedDailyCost: option.estimatedDailyCost,
+        notes: option.notes,
+        provider: option.provider,
+      }))
+    : [];
+
+  return JSON.stringify({
+    destination: plan.destination,
+    summary: plan.summary,
+    vibe: plan.vibe,
+    budget: plan.budget,
+    budgetHealth: plan.budgetHealth,
+    budgetBreakdown: plan.budgetBreakdown,
+    weatherNote: plan.weatherNote,
+    safetyTips: plan.safetyTips?.slice(0, 5),
+    packingList: plan.packingList?.slice(0, 8),
+    itinerary,
+    travelOptions,
+    localTransport,
+  });
+};
+
 const Chatbot = ({ plan, onClose, messages, setMessages }: ChatbotProps) => {
   const isMobile = useIsMobile();
   const [input, setInput] = useState('');
@@ -44,7 +97,7 @@ const Chatbot = ({ plan, onClose, messages, setMessages }: ChatbotProps) => {
 
     const params: { query: string; planContext?: string } = { query: messageText };
     if (plan) {
-      params.planContext = JSON.stringify(plan);
+      params.planContext = buildPlanContext(plan);
     }
 
     await streamChatResponse({
