@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Mail, Lock, User, Plane, Loader2, Eye, EyeOff, CheckCircle, Sparkles } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,9 +31,38 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [signupSuccess, setSignupSuccess] = useState(false);
+  const [pointer, setPointer] = useState({ x: 0.5, y: 0.5 });
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const parallaxLayers = useMemo(
+    () => [
+      { className: "h-2.5 w-2.5 rounded-full bg-primary/80 shadow-[0_0_18px_rgba(59,130,246,0.9)]", x: 18, y: 18, float: 10, duration: 8, blur: false },
+      { className: "h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,0.85)]", x: 30, y: 34, float: 14, duration: 11, blur: false },
+      { className: "h-3 w-3 rounded-full bg-amber-300 shadow-[0_0_18px_rgba(253,224,71,0.8)]", x: 42, y: 18, float: 12, duration: 9, blur: false },
+      { className: "h-2 w-2 rounded-full bg-white shadow-[0_0_16px_rgba(255,255,255,0.75)]", x: 58, y: 30, float: 9, duration: 10, blur: false },
+      { className: "h-2.5 w-2.5 rounded-full bg-primary/70 shadow-[0_0_18px_rgba(59,130,246,0.8)]", x: 70, y: 14, float: 13, duration: 12, blur: false },
+      { className: "h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.8)]", x: 82, y: 26, float: 11, duration: 8, blur: false },
+      { className: "h-2 w-2 rounded-full bg-fuchsia-300 shadow-[0_0_16px_rgba(232,121,249,0.7)]", x: 88, y: 42, float: 15, duration: 13, blur: false },
+      { className: "h-1.5 w-1.5 rounded-full bg-primary/70 shadow-[0_0_14px_rgba(59,130,246,0.8)]", x: 12, y: 52, float: 11, duration: 10, blur: false },
+      { className: "h-2.5 w-2.5 rounded-full bg-cyan-200 shadow-[0_0_18px_rgba(165,243,252,0.8)]", x: 24, y: 74, float: 12, duration: 9, blur: false },
+      { className: "h-2 w-2 rounded-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.72)]", x: 38, y: 68, float: 14, duration: 11, blur: false },
+      { className: "h-3 w-3 rounded-full bg-amber-200 shadow-[0_0_18px_rgba(253,230,138,0.75)]", x: 54, y: 82, float: 10, duration: 12, blur: false },
+      { className: "h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,0.75)]", x: 68, y: 68, float: 13, duration: 9, blur: false },
+      { className: "h-2.5 w-2.5 rounded-full bg-primary/70 shadow-[0_0_18px_rgba(59,130,246,0.85)]", x: 84, y: 80, float: 9, duration: 10, blur: false },
+      { className: "h-24 w-24 rounded-full bg-primary/10 blur-3xl", x: 40, y: 40, float: 8, duration: 16, blur: true },
+      { className: "h-20 w-20 rounded-full bg-cyan-400/10 blur-3xl", x: 78, y: 66, float: 10, duration: 18, blur: true },
+    ],
+    []
+  );
+
+  const handlePointerMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = (event.clientX - bounds.left) / bounds.width;
+    const y = (event.clientY - bounds.top) / bounds.height;
+    setPointer({ x, y });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,11 +119,46 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8 sm:px-6">
+    <div
+      className="relative min-h-screen overflow-hidden bg-background px-4 py-8 sm:px-6"
+      onMouseMove={handlePointerMove}
+      onMouseLeave={() => setPointer({ x: 0.5, y: 0.5 })}
+    >
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.6),_transparent_38%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.12),_transparent_30%),linear-gradient(180deg,_rgba(255,255,255,0.72),_rgba(255,255,255,0))] dark:bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.18),_transparent_30%),linear-gradient(180deg,_rgba(7,10,20,0.88),_rgba(7,10,20,0.96))]" />
+        <div className="absolute inset-0 opacity-[0.22] [background-image:linear-gradient(rgba(255,255,255,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.5)_1px,transparent_1px)] [background-size:72px_72px] [mask-image:radial-gradient(circle_at_center,black,transparent_78%)] dark:opacity-[0.12]" />
+        {parallaxLayers.map((layer, index) => {
+          const depth = index % 2 === 0 ? 1 : -1;
+          const moveX = (pointer.x - 0.5) * layer.x * depth;
+          const moveY = (pointer.y - 0.5) * layer.y * depth;
+          const intensity = index < 14 ? 1.2 : 1;
+          const drift = index % 3 === 0 ? 1 : -1;
+
+          return (
+            <motion.div
+              key={`auth-layer-${index}`}
+              className="absolute"
+              style={{ left: `${layer.x}%`, top: `${layer.y}%` }}
+              animate={{
+                x: [0, drift * (layer.float * 0.5), 0, drift * -(layer.float * 0.35), 0],
+                y: [0, -layer.float, 0, layer.float * 0.6, 0],
+                rotate: [0, drift * 6, 0, drift * -4, 0],
+              }}
+              transition={{ duration: layer.duration, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <motion.div
+                className={layer.className}
+                style={{ x: moveX * intensity, y: moveY * intensity }}
+              />
+            </motion.div>
+          );
+        })}
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mx-auto w-full max-w-sm"
+        className="relative mx-auto w-full max-w-sm"
       >
         <div className="mb-6 flex flex-col items-center">
           <div className="mb-3 h-14 w-14 rounded-2xl gradient-hero flex items-center justify-center shadow-elevated">
@@ -276,14 +340,7 @@ const Auth = () => {
             {isLogin ? "Sign Up" : "Sign In"}
           </button>
         </p>
-        <div className="mt-3 text-center">
-          <button
-            onClick={() => navigate("/")}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
-          >
-            Continue as guest →
-          </button>
-        </div>
+        {/* Guest access removed for production */}
       </motion.div>
     </div>
   );
