@@ -244,7 +244,6 @@ Create a `.env` file in the root directory with the following variables:
 # Supabase Configuration
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your_anon_key
-VITE_SUPABASE_SERVICE_KEY=your_service_key
 
 # OpenRouter API (for AI features)
 VITE_OPENROUTER_API_KEY=your_openrouter_key
@@ -428,7 +427,6 @@ vercel
 
 Set these in your hosting platform's dashboard:
 - All `.env` variables listed above
-- Make sure `VITE_SUPABASE_SERVICE_KEY` is kept secret
 
 ---
 

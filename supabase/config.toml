@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.post-trip-coach]
 verify_jwt = false
+
+[functions.plan-trip]
+verify_jwt = false

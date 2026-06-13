@@ -14,7 +14,6 @@ const FloatingChatButton = ({ onClick }: FloatingChatButtonProps) => {
   const constraintsRef = useRef(null);
 
   const handleClick = () => {
-    console.log("Chat button clicked, dragging:", dragging, "onClick func:", typeof onClick);
     if (!dragging) {
       onClick();
     }

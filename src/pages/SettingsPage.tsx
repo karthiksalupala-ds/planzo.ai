@@ -28,7 +28,7 @@ const SettingsPage = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [isDarkMode, setIsDarkMode] = useState(document.documentElement.classList.contains("dark"));
+  const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem("planzo_theme") === "dark" || document.documentElement.classList.contains("dark"));
   
   // Account State
   const [displayName, setDisplayName] = useState(user?.user_metadata?.display_name || "Traveler");
@@ -158,8 +158,16 @@ const SettingsPage = () => {
     setIsDeleting(true);
     
     if (!user) return;
-    await supabase.from("saved_trips").delete().eq("user_id", user.id);
-    await supabase.from("profiles").delete().eq("user_id", user.id);
+
+    try {
+      const { error: rpcError } = await supabase.rpc("delete_user_account");
+      if (rpcError) throw rpcError;
+    } catch (err) {
+      console.warn("Secure self-deletion RPC failed. Falling back to record deletion:", err);
+      await supabase.from("saved_trips").delete().eq("user_id", user.id);
+      await supabase.from("profiles").delete().eq("user_id", user.id);
+    }
+    
     await signOut();
     
     setIsDeleting(false);

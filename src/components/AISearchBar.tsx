@@ -17,7 +17,40 @@ const SCROLLING_PLACEHOLDERS = [
 const AISearchBar = () => {
   const [query, setQuery] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const navigate = useNavigate();
+
+  const handleSpeech = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice search is not supported in this browser. Please try Google Chrome.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.onresult = (event: any) => {
+      const speechToText = event.results[0][0].transcript;
+      setQuery(speechToText);
+    };
+
+    recognition.start();
+  };
 
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
 
@@ -86,7 +119,16 @@ const AISearchBar = () => {
             )}
           </div>
 
-          <button type="button" className="p-2 text-foreground/70 hover:text-foreground hover:bg-white/20 rounded-full transition-colors hidden sm:block">
+          <button
+            type="button"
+            onClick={handleSpeech}
+            className={`p-2 rounded-full transition-all hidden sm:block ${
+              isListening
+                ? "text-red-500 bg-red-500/10 animate-pulse border border-red-500/30 scale-110 shadow-sm"
+                : "text-foreground/70 hover:text-foreground hover:bg-white/20 border border-transparent"
+            }`}
+            title="Voice search"
+          >
             <Mic className="h-5 w-5" />
           </button>
           <button

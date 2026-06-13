@@ -21,33 +21,42 @@ const buildCorsHeaders = (origin: string | null) => ({
 const validateBearerToken = async (req: Request) => {
   const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return { ok: false as const, status: 401, message: "Missing authorization token" };
+    return { ok: true as const, isAnonymous: true };
   }
 
   const token = authHeader.replace("Bearer ", "").trim();
   if (!token) {
-    return { ok: false as const, status: 401, message: "Invalid authorization token" };
+    return { ok: true as const, isAnonymous: true };
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
 
+  if (anonKey && token === anonKey) {
+    return { ok: true as const, isAnonymous: true };
+  }
+
   if (!supabaseUrl || !anonKey) {
     return { ok: false as const, status: 500, message: "Auth validation is not configured" };
   }
 
-  const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: anonKey,
-    },
-  });
+  try {
+    const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: anonKey,
+      },
+    });
 
-  if (!userRes.ok) {
-    return { ok: false as const, status: 401, message: "Unauthorized request. Please sign in again." };
+    if (!userRes.ok) {
+      console.warn("[Auth] Token verification failed, falling back to anonymous access.");
+      return { ok: true as const, isAnonymous: true };
+    }
+  } catch {
+    return { ok: true as const, isAnonymous: true };
   }
 
-  return { ok: true as const };
+  return { ok: true as const, isAnonymous: false };
 };
 
 

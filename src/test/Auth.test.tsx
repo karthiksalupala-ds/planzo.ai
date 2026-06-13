@@ -61,12 +61,14 @@ describe("Auth Page Buttons Verification", () => {
   it("verifies Login/Signup toggle button functionality", () => {
     renderAuth();
     
-    // Default is Login
-    const toggleBtn = screen.getByText("Sign Up");
-    fireEvent.click(toggleBtn);
+    // Default is Login. Toggle to Create account using the tab button.
+    const toggleTab = screen.getAllByRole("button", { name: /^Create account$/ }).find(b => b.getAttribute("type") === "button");
+    expect(toggleTab).toBeDefined();
+    fireEvent.click(toggleTab!);
     
-    // Should be Signup now (Button text changes to Create Account)
-    expect(screen.getByText("Create Account")).toBeInTheDocument();
+    // Should be Signup now (Submit button text is Create account)
+    const submitBtn = screen.getAllByRole("button", { name: /^Create account$/ }).find(b => b.getAttribute("type") === "submit");
+    expect(submitBtn).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Display name")).toBeInTheDocument();
   });
 
@@ -78,8 +80,9 @@ describe("Auth Page Buttons Verification", () => {
     fireEvent.change(screen.getByPlaceholderText("Email address"), { target: { value: "test@test.com" } });
     fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "password123" } });
     
-    const submitBtn = screen.getByRole("button", { name: /^Sign In$/ });
-    fireEvent.click(submitBtn);
+    const submitBtn = screen.getAllByRole("button", { name: /^Sign in$/ }).find(b => b.getAttribute("type") === "submit");
+    expect(submitBtn).toBeDefined();
+    fireEvent.click(submitBtn!);
 
     await waitFor(() => {
       expect(mockSignIn).toHaveBeenCalledWith("test@test.com", "password123");
@@ -91,17 +94,19 @@ describe("Auth Page Buttons Verification", () => {
     
     renderAuth();
 
-    // Switch to Sign Up mode
-    const toggleBtn = screen.getByText("Sign Up");
-    fireEvent.click(toggleBtn);
+    // Switch to Sign Up mode using the tab button
+    const toggleTab = screen.getAllByRole("button", { name: /^Create account$/ }).find(b => b.getAttribute("type") === "button");
+    expect(toggleTab).toBeDefined();
+    fireEvent.click(toggleTab!);
 
     // Fill in the form
     fireEvent.change(screen.getByPlaceholderText("Email address"), { target: { value: "newuser@test.com" } });
     fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "password123" } });
     fireEvent.change(screen.getByPlaceholderText("Display name"), { target: { value: "New User" } });
 
-    const submitBtn = screen.getByRole("button", { name: /^Create Account$/ });
-    fireEvent.click(submitBtn);
+    const submitBtn = screen.getAllByRole("button", { name: /^Create account$/ }).find(b => b.getAttribute("type") === "submit");
+    expect(submitBtn).toBeDefined();
+    fireEvent.click(submitBtn!);
 
     await waitFor(() => {
       expect(mockSignUp).toHaveBeenCalledWith("newuser@test.com", "password123", "New User");

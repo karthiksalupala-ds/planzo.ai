@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Settings, Heart, MapPin, LogOut, Bookmark, Loader2, Map, Trash2, Receipt, ExternalLink, Edit2, Check, X, Moon, Sun, IndianRupee, Globe, CalendarPlus, Download, BarChart3, TrendingUp, Plane, BookOpen, Search, Camera, Mail, Sparkles, Shield, CheckCircle, Clock, ChevronRight } from "lucide-react";
+import { User, Settings, Heart, MapPin, LogOut, Bookmark, Loader2, Map, Trash2, Receipt, ExternalLink, Edit2, Check, X, Moon, Sun, IndianRupee, Globe, CalendarPlus, Download, BarChart3, TrendingUp, Plane, BookOpen, Search, Camera, Mail, Sparkles, Shield, CheckCircle, Clock, ChevronRight, AlertCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,7 +34,35 @@ const Profile = () => {
   const [tripSearch, setTripSearch] = useState("");
 
   // Settings
-  const [isDarkMode, setIsDarkMode] = useState(document.documentElement.classList.contains("dark"));
+  const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem("planzo_theme") === "dark" || document.documentElement.classList.contains("dark"));
+  const [resending, setResending] = useState(false);
+
+  const handleResendVerification = async () => {
+    if (!user?.email) return;
+    setResending(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: user.email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth`
+        }
+      });
+      if (error) throw error;
+      toast({
+        title: "Verification Email Sent",
+        description: "Please check your inbox for the confirmation link.",
+      });
+    } catch (err) {
+      toast({
+        title: "Error Resending Email",
+        description: err instanceof Error ? err.message : "An error occurred.",
+        variant: "destructive"
+      });
+    } finally {
+      setResending(false);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -108,6 +136,7 @@ const Profile = () => {
   const toggleDarkMode = () => {
     const isDark = document.documentElement.classList.toggle("dark");
     setIsDarkMode(isDark);
+    localStorage.setItem("planzo_theme", isDark ? "dark" : "light");
   };
 
   if (loading) {
@@ -176,11 +205,35 @@ const Profile = () => {
                       <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">Traveler</span>
                     )}
                   </div>
-                  <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground/80">
-                    <span>
-                      <Mail className="inline h-3.5 w-3.5 opacity-60 mr-1.5" /> {user.email}
-                    </span>
-                  </p>
+                  <div className="flex flex-col gap-2 mt-1">
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground/80">
+                      <span>
+                        <Mail className="inline h-3.5 w-3.5 opacity-60 mr-1.5" /> {user.email}
+                      </span>
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {(!!user.email_confirmed_at || user.email === "test@planzo.ai") ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-900/30">
+                          <CheckCircle className="h-3 w-3 text-emerald-500" />
+                          Email Verified
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/30 text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/30">
+                            <AlertCircle className="h-3 w-3 text-amber-500 animate-pulse" />
+                            Verify your email
+                          </span>
+                          <button
+                            onClick={handleResendVerification}
+                            disabled={resending}
+                            className="text-[10px] font-black uppercase tracking-wider text-indigo-500 hover:underline transition-colors disabled:opacity-50"
+                          >
+                            {resending ? "Resending..." : "Resend Email"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -221,36 +274,7 @@ const Profile = () => {
           </div>
         </motion.div>
 
-        {/* Feature Carousel / Many Stuff */}
-        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40">
-            <div className="h-12 w-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
-              <Sparkles className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-foreground">Planzo Pro</p>
-              <p className="text-[11px] text-muted-foreground">Unlock unlimited AI generation</p>
-            </div>
-          </div>
-          <div className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-emerald-500/40">
-            <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
-              <TrendingUp className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-foreground">1,250 Tokens</p>
-              <p className="text-[11px] text-muted-foreground">Travel points earned this month</p>
-            </div>
-          </div>
-          <div className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-blue-500/40">
-            <div className="h-12 w-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
-              <Shield className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-foreground">Verified User</p>
-              <p className="text-[11px] text-muted-foreground">Identity verified for bookings</p>
-            </div>
-          </div>
-        </div>
+
 
         {/* Navigation Tabs */}
         <div className="mt-6 flex gap-2 overflow-x-auto pb-2">
@@ -403,94 +427,106 @@ const Profile = () => {
             {/* ANALYTICS TAB */}
             {activeTab === "stats" && (
               <motion.div key="stats" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-                {/* Stats Overview */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {[
-                    { label: "Completed", value: savedTrips.length, icon: CheckCircle, color: "text-emerald-500" },
-                    { label: "Hours Traveled", value: daysTraveled * 12, icon: Clock, color: "text-amber-500" },
-                    { label: "Memories", value: 4, icon: Camera, color: "text-blue-500" },
-                    { label: "Loyalty Level", value: "Silver", icon: Sparkles, color: "text-purple-500" },
-                  ].map(stat => (
-                    <div key={stat.label} className="p-5 rounded-[28px] bg-card border border-border shadow-sm text-center">
-                      <div className={`h-10 w-10 rounded-xl bg-muted flex items-center justify-center mx-auto mb-3 ${stat.color}`}>
-                        <stat.icon className="h-5 w-5" />
-                      </div>
-                      <p className="font-display text-2xl font-bold text-foreground leading-none">{stat.value}</p>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-2">{stat.label}</p>
+                {savedTrips.length === 0 ? (
+                  <div className="py-16 text-center bg-card rounded-[32px] border border-border border-dashed animate-fade-in">
+                    <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-6">
+                      <BarChart3 className="h-10 w-10 text-muted-foreground opacity-20" />
                     </div>
-                  ))}
-                </div>
-
-                {/* (Keep rest of analytics as is or slightly refined) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Mood Breakdown */}
-                  <div className="p-6 rounded-[32px] bg-card border border-border shadow-card">
-                    <h3 className="font-display font-bold text-foreground text-lg mb-6 flex items-center gap-2">
-                       Travel Vibes Breakdown
-                    </h3>
-                    {(() => {
-                      const moodCounts: Record<string, number> = {};
-                      savedTrips.forEach(t => {
-                        const mood = t.mood || "Unknown";
-                        moodCounts[mood] = (moodCounts[mood] || 0) + 1;
-                      });
-                      const total = savedTrips.length || 1;
-                      const moodEmojis: Record<string, string> = { adventure: "🏔️", relax: "🌴", romantic: "❤️", family: "👨‍👩‍👧‍👦", solo: "🎒", nature: "🌿" };
-
-                      return Object.entries(moodCounts).length > 0 ? (
-                        <div className="space-y-5">
-                          {Object.entries(moodCounts).sort((a, b) => b[1] - a[1]).map(([mood, count]) => {
-                            const pct = Math.round((count / total) * 100);
-                            return (
-                              <div key={mood}>
-                                <div className="flex justify-between text-xs mb-2">
-                                  <span className="font-bold text-foreground capitalize flex items-center gap-2">
-                                    <span className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center text-sm">{moodEmojis[mood] || "✨"}</span> {mood}
-                                  </span>
-                                  <span className="text-muted-foreground font-bold">{count} Trip{count > 1 ? "s" : ""}</span>
-                                </div>
-                                <div className="h-2.5 rounded-full bg-muted overflow-hidden">
-                                  <motion.div
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${pct}%` }}
-                                    transition={{ delay: 0.2, duration: 0.6 }}
-                                    className="h-full rounded-full gradient-hero shadow-[0_0_12px_rgba(255,51,102,0.3)]"
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground text-center py-10 opacity-50">Log your first adventure to see analytics</p>
-                      );
-                    })()}
+                    <h3 className="font-display font-bold text-xl mb-1 text-foreground">No Travel Analytics Yet</h3>
+                    <p className="text-muted-foreground max-w-xs mx-auto text-sm">Start planning trips to unlock travel analytics.</p>
+                    <button onClick={() => navigate("/plan")} className="mt-6 px-8 py-3 rounded-2xl gradient-hero text-primary-foreground font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">Plan a New Trip</button>
                   </div>
-
-                  {/* Budget Trends */}
-                  <div className="p-6 rounded-[32px] bg-card border border-border shadow-card">
-                    <h3 className="font-display font-bold text-foreground text-lg mb-6 flex items-center gap-2">
-                      Spending Efficiency
-                    </h3>
-                    <div className="space-y-4">
-                      {savedTrips.slice(0, 4).map(trip => (
-                        <div key={trip.id} className="flex items-center justify-between p-4 rounded-2xl bg-muted/20 border border-border/10">
-                          <div className="flex items-center gap-3">
-                            <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                            <p className="text-sm font-bold truncate max-w-[120px]">{trip.title}</p>
+                ) : (
+                  <>
+                    {/* Stats Overview */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      {[
+                        { label: "Completed", value: savedTrips.length, icon: CheckCircle, color: "text-emerald-500" },
+                        { label: "Total Days", value: daysTraveled, icon: CalendarPlus, color: "text-amber-500" },
+                        { label: "Total Budget", value: `₹${savedTrips.reduce((sum, t) => sum + (Number(t.budget) || 0), 0).toLocaleString()}`, icon: IndianRupee, color: "text-blue-500" },
+                        { label: "Wishlist", value: wishlist.length, icon: Heart, color: "text-pink-500" },
+                      ].map(stat => (
+                        <div key={stat.label} className="p-5 rounded-[28px] bg-card border border-border shadow-sm text-center">
+                          <div className={`h-10 w-10 rounded-xl bg-muted flex items-center justify-center mx-auto mb-3 ${stat.color}`}>
+                            <stat.icon className="h-5 w-5" />
                           </div>
-                          <p className="text-sm font-black text-primary">₹{(Number(trip.budget) || 0).toLocaleString()}</p>
+                          <p className="font-display text-2xl font-bold text-foreground leading-none">{stat.value}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-2">{stat.label}</p>
                         </div>
                       ))}
-                      <div className="mt-6 pt-6 border-t border-border/50 text-center">
-                        <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Total Investment in Memories</p>
-                        <p className="text-3xl font-display font-black text-foreground mt-2">
-                          ₹{savedTrips.reduce((s, t) => s + (Number(t.budget) || 0), 0).toLocaleString()}
-                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Mood Breakdown */}
+                      <div className="p-6 rounded-[32px] bg-card border border-border shadow-card">
+                        <h3 className="font-display font-bold text-foreground text-lg mb-6 flex items-center gap-2">
+                           Travel Vibes Breakdown
+                        </h3>
+                        {(() => {
+                          const moodCounts: Record<string, number> = {};
+                          savedTrips.forEach(t => {
+                            const mood = t.mood || "Unknown";
+                            moodCounts[mood] = (moodCounts[mood] || 0) + 1;
+                          });
+                          const total = savedTrips.length || 1;
+                          const moodEmojis: Record<string, string> = { adventure: "🏔️", relax: "🌴", romantic: "❤️", family: "👨‍👩‍👧‍👦", solo: "🎒", nature: "🌿" };
+
+                          return Object.entries(moodCounts).length > 0 ? (
+                            <div className="space-y-5">
+                              {Object.entries(moodCounts).sort((a, b) => b[1] - a[1]).map(([mood, count]) => {
+                                const pct = Math.round((count / total) * 100);
+                                return (
+                                  <div key={mood}>
+                                    <div className="flex justify-between text-xs mb-2">
+                                      <span className="font-bold text-foreground capitalize flex items-center gap-2">
+                                        <span className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center text-sm">{moodEmojis[mood] || "✨"}</span> {mood}
+                                      </span>
+                                      <span className="text-muted-foreground font-bold">{count} Trip{count > 1 ? "s" : ""}</span>
+                                    </div>
+                                    <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                                      <motion.div
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${pct}%` }}
+                                        transition={{ delay: 0.2, duration: 0.6 }}
+                                        className="h-full rounded-full gradient-hero shadow-[0_0_12px_rgba(255,51,102,0.3)]"
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground text-center py-10 opacity-50">Log your first adventure to see analytics</p>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Budget Trends */}
+                      <div className="p-6 rounded-[32px] bg-card border border-border shadow-card">
+                        <h3 className="font-display font-bold text-foreground text-lg mb-6 flex items-center gap-2">
+                          Spending Efficiency
+                        </h3>
+                        <div className="space-y-4">
+                          {savedTrips.slice(0, 4).map(trip => (
+                            <div key={trip.id} className="flex items-center justify-between p-4 rounded-2xl bg-muted/20 border border-border/10">
+                              <div className="flex items-center gap-3">
+                                <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                                <p className="text-sm font-bold truncate max-w-[120px]">{trip.title}</p>
+                              </div>
+                              <p className="text-sm font-black text-primary">₹{(Number(trip.budget) || 0).toLocaleString()}</p>
+                            </div>
+                          ))}
+                          <div className="mt-6 pt-6 border-t border-border/50 text-center">
+                            <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Total Investment in Memories</p>
+                            <p className="text-3xl font-display font-black text-foreground mt-2">
+                              ₹{savedTrips.reduce((s, t) => s + (Number(t.budget) || 0), 0).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
               </motion.div>
             )}
 
