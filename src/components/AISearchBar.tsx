@@ -36,8 +36,16 @@ const AISearchBar = () => {
       setIsListening(true);
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error:", event.error);
       setIsListening(false);
+      if (event.error === "not-allowed") {
+        alert("Microphone permission denied. Please allow microphone access in your browser settings.");
+      } else if (event.error === "no-speech") {
+        alert("No speech detected. Please speak clearly into your microphone.");
+      } else {
+        alert(`Voice search error: ${event.error}`);
+      }
     };
 
     recognition.onend = () => {
@@ -49,7 +57,12 @@ const AISearchBar = () => {
       setQuery(speechToText);
     };
 
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error("Failed to start speech recognition:", err);
+      setIsListening(false);
+    }
   };
 
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -121,7 +134,10 @@ const AISearchBar = () => {
 
           <button
             type="button"
-            onClick={handleSpeech}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              handleSpeech();
+            }}
             className={`p-2 rounded-full transition-all hidden sm:block ${
               isListening
                 ? "text-red-500 bg-red-500/10 animate-pulse border border-red-500/30 scale-110 shadow-sm"
