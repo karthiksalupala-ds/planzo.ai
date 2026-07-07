@@ -93,6 +93,7 @@ export interface TripPlan {
   };
   weatherNote?: string;
   vibe?: string;
+  agentNotes?: Array<{ timestamp: string; message: string }>;
 }
 
 export interface CategoryCoaching {

@@ -4,21 +4,21 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { 
-  ArrowLeft, Moon, Sun, Globe, Download, ChevronRight, LogOut, 
-  Shield, User, Settings as SettingsIcon, Bell, Database, Trash, 
+import {
+  ArrowLeft, Moon, Sun, Globe, Download, ChevronRight, LogOut,
+  Shield, User, Settings as SettingsIcon, Bell, Database, Trash,
   Lock, X, Loader2, CheckCircle, ShieldAlert, Monitor, Sparkles,
-  HelpCircle, Eye, RefreshCw, Key
+  HelpCircle, Eye, RefreshCw, Key, Camera
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-type SettingsSection = 
-  | "account" 
-  | "appearance" 
-  | "notifications" 
-  | "regional" 
-  | "security" 
-  | "data" 
+type SettingsSection =
+  | "account"
+  | "appearance"
+  | "notifications"
+  | "regional"
+  | "security"
+  | "data"
   | "privacy"
   | "danger";
 
@@ -41,13 +41,36 @@ const SettingsPage = () => {
   // Account State
   const [displayName, setDisplayName] = useState(user?.user_metadata?.display_name || "Traveler");
   const [travelStyles, setTravelStyles] = useState<string[]>([]);
+  const [username, setUsername] = useState(localStorage.getItem("planzo_username") || (user?.email ? user.email.split("@")[0] : ""));
+  const [bio, setBio] = useState(localStorage.getItem("planzo_bio") || "");
+  const [phoneNumber, setPhoneNumber] = useState(localStorage.getItem("planzo_phone") || user?.phone || "");
   const [isSaving, setIsSaving] = useState(false);
+
+  // Appearance State
+  const [animationsEnabled, setAnimationsEnabled] = useState(localStorage.getItem("planzo_animations") !== "off");
+  const [chatWallpaper, setChatWallpaper] = useState(localStorage.getItem("planzo_wallpaper") || "Cosmic Dark");
+
+  // Security & Privacy State
+  const [lastSeen, setLastSeen] = useState(localStorage.getItem("planzo_last_seen") || "Everyone");
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(localStorage.getItem("planzo_2fa") === "on");
+
+  // Notifications State
+  const [notificationSound, setNotificationSound] = useState(localStorage.getItem("planzo_notif_sound") !== "off");
+  const [badgeCountEnabled, setBadgeCountEnabled] = useState(localStorage.getItem("planzo_badge_count") !== "off");
+
+  // Data & Storage State
+  const [autoDownloadWiFi, setAutoDownloadWiFi] = useState(localStorage.getItem("planzo_download_wifi") !== "off");
+  const [autoDownloadCellular, setAutoDownloadCellular] = useState(localStorage.getItem("planzo_download_cellular") === "on");
 
   // Regional Preferences
   const [currency, setCurrency] = useState(localStorage.getItem("planzo_currency") || "INR (₹)");
   const [language, setLanguage] = useState(localStorage.getItem("planzo_language") || "English");
+  const [timezone, setTimezone] = useState(localStorage.getItem("planzo_timezone") || "Asia/Kolkata (GMT+5:30)");
 
-  // Notifications
+  // Folders State
+  const [customFolderTag, setCustomFolderTag] = useState(localStorage.getItem("planzo_folder_tag") || "Personal");
+
+  // Notifications (Original)
   const [tripReminders, setTripReminders] = useState(localStorage.getItem("planzo_trip_reminders") !== "off");
   const [productUpdates, setProductUpdates] = useState(localStorage.getItem("planzo_product_updates") !== "off");
   const [securityAlerts, setSecurityAlerts] = useState(localStorage.getItem("planzo_security_alerts") !== "off");
@@ -90,7 +113,7 @@ const SettingsPage = () => {
   const changeTheme = (mode: "light" | "dark" | "system") => {
     setThemeMode(mode);
     localStorage.setItem("planzo_theme", mode);
-    
+
     if (mode === "dark") {
       document.documentElement.classList.add("dark");
     } else if (mode === "light") {
@@ -151,7 +174,7 @@ const SettingsPage = () => {
   const handleExportData = async () => {
     if (!user) return;
     setIsExporting(true);
-    
+
     const { data: trips, error } = await supabase.from("saved_trips").select("*").eq("user_id", user.id);
     if (error) {
       setIsExporting(false);
@@ -192,7 +215,7 @@ const SettingsPage = () => {
     if (!user) return;
 
     try {
-      const { error } = await supabase.rpc("delete_user_account");
+      const { error } = await (supabase as any).rpc("delete_user_account");
       if (error) throw error;
     } catch (err) {
       console.warn("RPC deletion failed. Falling back to record cleanup:", err);
@@ -208,7 +231,7 @@ const SettingsPage = () => {
   };
 
   const toggleStyle = (style: string) => {
-    setTravelStyles(prev => 
+    setTravelStyles(prev =>
       prev.includes(style) ? prev.filter(s => s !== style) : [...prev, style]
     );
   };
@@ -234,32 +257,33 @@ const SettingsPage = () => {
   const securityScore = isEmailVerified ? 92 : 65;
 
   // Sidebar items
+  // Sidebar items styled with colored badges matching the Telegram screenshot
   const navigationItems = [
-    { id: "account", icon: User, label: "Profile", desc: "Display info & styles" },
-    { id: "appearance", icon: Sun, label: "Appearance", desc: "Themes & layouts" },
-    { id: "notifications", icon: Bell, label: "Notifications", desc: "Reminders & emails" },
-    { id: "regional", icon: Globe, label: "Regional Settings", desc: "Currency & language" },
-    { id: "security", icon: Shield, label: "Security Center", desc: "Auth details & sessions" },
-    { id: "data", icon: Database, label: "Data Management", desc: "JSON backups & cleanup" },
-    { id: "privacy", icon: Eye, label: "Privacy Center", desc: "Cookies & collection" },
-    { id: "danger", icon: Trash, label: "Danger Zone", desc: "Account termination", color: "text-red-500 hover:bg-red-500/5" }
+    { id: "account", icon: User, label: "Account", desc: "Display name & travel style tags", bg: "bg-blue-500 text-white" },
+    { id: "appearance", icon: Sun, label: "Chat Settings", desc: "Wallpaper, Night Mode, Themes", bg: "bg-amber-500 text-white" },
+    { id: "notifications", icon: Bell, label: "Notifications", desc: "Sounds, Calls, Alerts, Updates", bg: "bg-rose-500 text-white" },
+    { id: "regional", icon: Globe, label: "Language & Locale", desc: "Currency & display languages", bg: "bg-purple-500 text-white" },
+    { id: "security", icon: Shield, label: "Privacy & Security", desc: "Last Seen, Devices, Passkeys", bg: "bg-emerald-500 text-white" },
+    { id: "data", icon: Database, label: "Data and Storage", desc: "JSON backups & media settings", bg: "bg-sky-500 text-white" },
+    { id: "privacy", icon: Eye, label: "Chat Folders", desc: "Cookies, Telemetry & analytics", bg: "bg-indigo-500 text-white" },
+    { id: "danger", icon: Trash, label: "Delete Account", desc: "Account termination", bg: "bg-red-500 text-white" }
   ] as const;
 
   // Currency Conversion Preview details
   const getCurrencyPreview = () => {
     const symbol = currency.includes("USD") ? "$" : currency.includes("EUR") ? "€" : currency.includes("GBP") ? "£" : "₹";
-    const rate = currency.includes("USD") ? 1/83 : currency.includes("EUR") ? 1/90 : currency.includes("GBP") ? 1/105 : 1;
+    const rate = currency.includes("USD") ? 1 / 83 : currency.includes("EUR") ? 1 / 90 : currency.includes("GBP") ? 1 / 105 : 1;
     const converted = Math.round(15000 * rate);
     return `₹15,000 INR = ${symbol}${converted.toLocaleString()} ${currency.split(" ")[0]}`;
   };
 
   return (
     <div className="min-h-screen bg-slate-50/50 dark:bg-zinc-950/50 pb-20">
-      
+
       {/* Sticky Header */}
       <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center gap-4">
-          <button 
+          <button
             onClick={() => {
               if (isMobile && activeSection !== null) {
                 setActiveSection(null);
@@ -279,72 +303,55 @@ const SettingsPage = () => {
 
       <div className="max-w-6xl mx-auto px-4 mt-6">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-          
+
           {/* LEFT COLUMN: Sidebar Navigation */}
           {(!isMobile || activeSection === null) && (
-            <div className="col-span-1 md:col-span-4 space-y-2">
-              
-              {/* 1. ACCOUNT OVERVIEW CARD */}
-              <div className="p-5 rounded-[28px] border border-border/70 bg-card shadow-sm mb-4 space-y-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">Planzo Account</h3>
-                    <p className="text-[10px] text-muted-foreground font-semibold mt-0.5">Explorer Level 10</p>
-                  </div>
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                </div>
-                
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-                    <span>Profile Completion</span>
-                    <span>85%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full bg-primary rounded-full w-[85%]" />
-                  </div>
-                </div>
+            <div className="col-span-1 md:col-span-4 space-y-4">
 
-                <div className="pt-2 grid grid-cols-2 gap-2 text-[10px] font-black uppercase text-muted-foreground">
-                  <div className="p-2.5 rounded-xl bg-muted/20 border border-border/20">
-                    <p className="text-[8px] text-slate-400">Security</p>
-                    <p className="text-xs font-black text-slate-800 dark:text-slate-100 mt-1">92/100</p>
+              {/* 1. TELEGRAM-STYLE PROFILE HEADER CARD */}
+              <div className="flex flex-col items-center p-6 bg-card border border-border/70 rounded-[28px] shadow-sm space-y-4 relative overflow-hidden">
+                <div className="relative group">
+                  <div className="h-24 w-24 rounded-full bg-gradient-to-br from-indigo-500 to-purple-650 flex items-center justify-center text-white text-3xl font-black shadow-md border border-border/20">
+                    {displayName ? displayName.slice(0, 2).toUpperCase() : "TR"}
                   </div>
-                  <div className="p-2.5 rounded-xl bg-muted/20 border border-border/20">
-                    <p className="text-[8px] text-slate-400">Verified Status</p>
-                    <p className="text-xs font-black text-emerald-600 dark:text-emerald-400 mt-1">Active</p>
-                  </div>
+                  <button className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-blue-500 hover:bg-blue-600 border-2 border-card text-white flex items-center justify-center shadow-lg transition-transform hover:scale-105 active:scale-95">
+                    <Camera className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="text-center">
+                  <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">{displayName || "Traveler"}</h2>
+                  <p className="text-xs text-muted-foreground font-semibold mt-1">{phoneNumber || user?.email || ""}</p>
                 </div>
               </div>
 
-              {/* Navigation Items list */}
-              {navigationItems.map(item => {
-                const Icon = item.icon;
-                const isSelected = activeSection === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveSection(item.id)}
-                    className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all text-left group ${
-                      isSelected 
-                        ? "bg-card border-primary/30 shadow-sm" 
-                        : "bg-transparent border-transparent hover:bg-muted/20"
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`h-10 w-10 rounded-xl flex items-center justify-center border border-border/40 group-hover:scale-105 transition-transform ${
-                        isSelected ? "bg-primary/10 text-primary" : "bg-card text-muted-foreground"
-                      } ${item.color}`}>
-                        <Icon className="h-4.5 w-4.5" />
+              {/* Navigation Items list grouped inside card */}
+              <div className="rounded-[28px] border border-border/70 bg-card p-2 space-y-1 shadow-sm">
+                {navigationItems.map(item => {
+                  const Icon = item.icon;
+                  const isSelected = activeSection === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveSection(item.id)}
+                      className={`w-full flex items-center justify-between p-3.5 rounded-2xl transition-all text-left ${isSelected
+                        ? "bg-slate-100 dark:bg-zinc-800/60 border border-border/40"
+                        : "bg-transparent border border-transparent hover:bg-muted/15"
+                        }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`h-9 w-9 rounded-xl flex items-center justify-center shadow-sm ${item.bg}`}>
+                          <Icon className="h-4.5 w-4.5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-slate-800 dark:text-slate-100">{item.label}</p>
+                          <p className="text-[10px] text-muted-foreground font-semibold mt-0.5">{item.desc}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className={`text-xs font-black uppercase tracking-wider ${isSelected ? "text-slate-800 dark:text-slate-100" : "text-slate-700 dark:text-slate-350"}`}>{item.label}</p>
-                        <p className="text-[10px] text-muted-foreground font-bold mt-0.5">{item.desc}</p>
-                      </div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground opacity-60" />
-                  </button>
-                );
-              })}
+                      <ChevronRight className="h-4 w-4 text-muted-foreground opacity-60" />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -364,7 +371,7 @@ const SettingsPage = () => {
                     <div className="flex justify-between items-center pb-4 border-b border-border/40">
                       <div>
                         <h2 className="font-display font-black text-lg text-slate-800 dark:text-slate-100 capitalize">
-                          {activeSection === "danger" ? "Danger Zone" : activeSection === "regional" ? "Regional Settings" : `${activeSection} Settings`}
+                          {activeSection === "danger" ? "Delete Account" : activeSection === "regional" ? "Regional Settings" : `${activeSection} Settings`}
                         </h2>
                         <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed font-semibold">
                           {activeSection === "account" && "Update display preferences and travel style tags"}
@@ -377,9 +384,9 @@ const SettingsPage = () => {
                           {activeSection === "danger" && "Permanent account wiping protocols"}
                         </p>
                       </div>
-                      
+
                       {isMobile && (
-                        <button 
+                        <button
                           onClick={() => setActiveSection(null)}
                           className="px-3 py-1.5 rounded-xl bg-muted/40 border border-border/30 text-[9px] font-black uppercase tracking-widest"
                         >
@@ -391,15 +398,50 @@ const SettingsPage = () => {
                     {/* Section Forms */}
                     {activeSection === "account" && (
                       <div className="space-y-6">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Display Name</label>
-                          <input 
-                            type="text" 
-                            value={displayName}
-                            onChange={e => setDisplayName(e.target.value)}
-                            className="w-full rounded-2xl border border-border/80 bg-background px-4 py-3.5 text-sm font-medium outline-none focus:ring-4 focus:ring-primary/10 transition-all"
-                            placeholder="Your Name"
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Display Name</label>
+                            <input
+                              type="text"
+                              value={displayName}
+                              onChange={e => setDisplayName(e.target.value)}
+                              className="w-full rounded-2xl border border-border/80 bg-background px-4 py-3.5 text-sm font-medium outline-none focus:ring-4 focus:ring-primary/10 transition-all"
+                              placeholder="Your Name"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Username</label>
+                            <input
+                              type="text"
+                              value={username}
+                              onChange={e => setUsername(e.target.value)}
+                              className="w-full rounded-2xl border border-border/80 bg-background px-4 py-3.5 text-sm font-medium outline-none focus:ring-4 focus:ring-primary/10 transition-all"
+                              placeholder="username"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Phone Number</label>
+                            <input
+                              type="text"
+                              value={phoneNumber}
+                              onChange={e => setPhoneNumber(e.target.value)}
+                              className="w-full rounded-2xl border border-border/80 bg-background px-4 py-3.5 text-sm font-medium outline-none focus:ring-4 focus:ring-primary/10 transition-all"
+                              placeholder="+91 XXXXX XXXXX"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Bio</label>
+                            <input
+                              type="text"
+                              value={bio}
+                              onChange={e => setBio(e.target.value)}
+                              className="w-full rounded-2xl border border-border/80 bg-background px-4 py-3.5 text-sm font-medium outline-none focus:ring-4 focus:ring-primary/10 transition-all"
+                              placeholder="Bio details"
+                            />
+                          </div>
                         </div>
 
                         <div className="space-y-3">
@@ -411,11 +453,10 @@ const SettingsPage = () => {
                                 <button
                                   key={style}
                                   onClick={() => toggleStyle(style)}
-                                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-all ${
-                                    isSelected 
-                                      ? "bg-primary border-primary text-white shadow-md shadow-primary/15" 
-                                      : "bg-muted/30 border-border/50 text-muted-foreground hover:border-primary/45"
-                                  }`}
+                                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-all ${isSelected
+                                    ? "bg-primary border-primary text-white shadow-md shadow-primary/15"
+                                    : "bg-muted/30 border-border/50 text-muted-foreground hover:border-primary/45"
+                                    }`}
                                 >
                                   {style}
                                 </button>
@@ -424,8 +465,13 @@ const SettingsPage = () => {
                           </div>
                         </div>
 
-                        <button 
-                          onClick={handleSaveAccountProfile}
+                        <button
+                          onClick={() => {
+                            handleSaveAccountProfile();
+                            localStorage.setItem("planzo_username", username);
+                            localStorage.setItem("planzo_bio", bio);
+                            localStorage.setItem("planzo_phone", phoneNumber);
+                          }}
                           disabled={isSaving}
                           className="w-full py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-slate-100 dark:text-slate-900 font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50"
                         >
@@ -449,9 +495,8 @@ const SettingsPage = () => {
                               <button
                                 key={opt.id}
                                 onClick={() => changeTheme(opt.id as any)}
-                                className={`rounded-2xl border p-2 text-left flex flex-col justify-between h-36 transition-all group overflow-hidden ${
-                                  isSelected ? "border-primary ring-2 ring-primary/20 scale-103" : "border-border/60 hover:border-primary/40"
-                                }`}
+                                className={`rounded-2xl border p-2 text-left flex flex-col justify-between h-36 transition-all group overflow-hidden ${isSelected ? "border-primary ring-2 ring-primary/20 scale-103" : "border-border/60 hover:border-primary/40"
+                                  }`}
                               >
                                 {/* Theme mini preview box */}
                                 <div className={`w-full flex-grow rounded-xl ${opt.bg} border ${opt.border} p-3 flex flex-col justify-between overflow-hidden shadow-inner`}>
@@ -473,19 +518,68 @@ const SettingsPage = () => {
                             );
                           })}
                         </div>
+
+                        {/* Animations toggle */}
+                        <div className="pt-4 border-t border-border/40 space-y-4">
+                          <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Interface Features</h4>
+                          <div
+                            onClick={() => {
+                              const next = !animationsEnabled;
+                              setAnimationsEnabled(next);
+                              localStorage.setItem("planzo_animations", next ? "on" : "off");
+                              toast({ title: `Animations ${next ? 'enabled' : 'disabled'}` });
+                            }}
+                            className="flex justify-between items-center p-4 rounded-2xl bg-muted/15 border border-border/40 cursor-pointer hover:bg-muted/25 transition-all"
+                          >
+                            <div>
+                              <p className="text-xs font-black text-slate-800 dark:text-slate-100">Enable Animations</p>
+                              <p className="text-[10px] text-muted-foreground font-semibold mt-0.5">Smooth transitions and micro-interactions in chat & planner</p>
+                            </div>
+                            <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${animationsEnabled ? "bg-primary" : "bg-muted-foreground/30"}`}>
+                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${animationsEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Wallpaper picker */}
+                        <div className="space-y-3">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Chat Wallpaper</label>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            {["Cosmic Dark", "Sunset Glow", "Classic Teal", "Ocean Breeze"].map(wall => {
+                              const isSelected = chatWallpaper === wall;
+                              return (
+                                <button
+                                  key={wall}
+                                  onClick={() => {
+                                    setChatWallpaper(wall);
+                                    localStorage.setItem("planzo_wallpaper", wall);
+                                    toast({ title: `Wallpaper updated to ${wall}` });
+                                  }}
+                                  className={`py-3 rounded-xl text-[10px] font-black tracking-wider uppercase border transition-all ${isSelected
+                                    ? "bg-primary/10 border-primary text-primary"
+                                    : "bg-muted/10 border-border/60 text-muted-foreground hover:border-primary/40"
+                                    }`}
+                                >
+                                  {wall}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     )}
-
                     {activeSection === "notifications" && (
                       <div className="space-y-4">
                         {[
                           { key: "reminders", label: "Trip Reminders", desc: "Notify before upcoming departures", active: tripReminders, set: setTripReminders },
                           { key: "updates", label: "Product Updates", desc: "New features and custom releases", active: productUpdates, set: setProductUpdates },
                           { key: "security", label: "Security Alerts", desc: "Account security audit indicators", active: securityAlerts, set: setSecurityAlerts },
-                          { key: "marketing", label: "Marketing Insights", desc: "Seasonal trip ideas and promotions", active: marketingEmails, set: setMarketingEmails }
+                          { key: "marketing", label: "Marketing Insights", desc: "Seasonal trip ideas and promotions", active: marketingEmails, set: setMarketingEmails },
+                          { key: "notif_sound", label: "Play Sound", desc: "Play standard chime for new messages & countdowns", active: notificationSound, set: setNotificationSound },
+                          { key: "badge_count", label: "Badge Counter", desc: "Show badge count for unread exploration messages", active: badgeCountEnabled, set: setBadgeCountEnabled }
                         ].map(item => (
-                          <div 
-                            key={item.key} 
+                          <div
+                            key={item.key}
                             onClick={() => {
                               const next = !item.active;
                               item.set(next);
@@ -521,11 +615,10 @@ const SettingsPage = () => {
                                     localStorage.setItem("planzo_currency", curr);
                                     toast({ title: `Currency updated to ${curr}` });
                                   }}
-                                  className={`py-3.5 rounded-2xl text-[10px] font-black tracking-widest uppercase border transition-all ${
-                                    isSelected 
-                                      ? "bg-primary/10 border-primary text-primary" 
-                                      : "bg-muted/10 border-border/60 text-muted-foreground hover:border-primary/40"
-                                  }`}
+                                  className={`py-3.5 rounded-2xl text-[10px] font-black tracking-widest uppercase border transition-all ${isSelected
+                                    ? "bg-primary/10 border-primary text-primary"
+                                    : "bg-muted/10 border-border/60 text-muted-foreground hover:border-primary/40"
+                                    }`}
                                 >
                                   {curr}
                                 </button>
@@ -542,7 +635,7 @@ const SettingsPage = () => {
 
                         <div className="space-y-2">
                           <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Display Language</label>
-                          <select 
+                          <select
                             value={language}
                             onChange={(e) => {
                               setLanguage(e.target.value);
@@ -554,6 +647,24 @@ const SettingsPage = () => {
                             <option value="English">English</option>
                             <option value="Hindi" disabled>Hindi (Coming Soon)</option>
                             <option value="Spanish" disabled>Spanish (Coming Soon)</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Time Zone</label>
+                          <select
+                            value={timezone}
+                            onChange={(e) => {
+                              setTimezone(e.target.value);
+                              localStorage.setItem("planzo_timezone", e.target.value);
+                              toast({ title: `Time Zone updated to ${e.target.value}` });
+                            }}
+                            className="w-full py-3.5 px-4 rounded-2xl border border-border/85 bg-background text-sm font-bold outline-none"
+                          >
+                            <option value="Asia/Kolkata (GMT+5:30)">Asia/Kolkata (GMT+5:30)</option>
+                            <option value="UTC (GMT+0:00)">UTC (GMT+0:00)</option>
+                            <option value="America/New_York (GMT-5:00)">America/New_York (GMT-5:00)</option>
+                            <option value="Europe/London (GMT+0:00)">Europe/London (GMT+0:00)</option>
                           </select>
                         </div>
                       </div>
@@ -583,7 +694,7 @@ const SettingsPage = () => {
                         {/* Security Details row */}
                         <div className="space-y-3">
                           <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Credentials Audit</h4>
-                          
+
                           <div className="p-4 rounded-2xl border border-border/30 bg-muted/10 flex justify-between items-center text-xs font-bold">
                             <span>Email Verified</span>
                             <span className={`px-2.5 py-1 rounded-full text-[9px] uppercase font-black ${isEmailVerified ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
@@ -596,7 +707,7 @@ const SettingsPage = () => {
                             <span className="text-muted-foreground">{user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleDateString() : "Today"}</span>
                           </div>
 
-                          <button 
+                          <button
                             onClick={handleResetPassword}
                             className="w-full flex items-center justify-between p-4 bg-muted/10 hover:bg-muted/20 border border-border/50 rounded-2xl text-left transition-all"
                           >
@@ -609,6 +720,43 @@ const SettingsPage = () => {
                             </div>
                             <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </button>
+
+                          {/* Last Seen visibility */}
+                          <div className="p-4 rounded-2xl border border-border/30 bg-muted/10 flex justify-between items-center text-xs font-bold">
+                            <span>Last Seen & Online</span>
+                            <select
+                              value={lastSeen}
+                              onChange={(e) => {
+                                setLastSeen(e.target.value);
+                                localStorage.setItem("planzo_last_seen", e.target.value);
+                                toast({ title: `Last Seen visibility set to ${e.target.value}` });
+                              }}
+                              className="bg-transparent dark:bg-zinc-900 border-none outline-none font-black text-primary text-right cursor-pointer"
+                            >
+                              <option value="Everyone">Everyone</option>
+                              <option value="My Contacts">My Contacts</option>
+                              <option value="Nobody">Nobody</option>
+                            </select>
+                          </div>
+
+                          {/* Two-Factor Authentication Toggle */}
+                          <div
+                            onClick={() => {
+                              const next = !twoFactorEnabled;
+                              setTwoFactorEnabled(next);
+                              localStorage.setItem("planzo_2fa", next ? "on" : "off");
+                              toast({ title: `2FA ${next ? 'enabled' : 'disabled'}` });
+                            }}
+                            className="flex justify-between items-center p-4 rounded-2xl bg-muted/10 border border-border/30 cursor-pointer hover:bg-muted/20 transition-all"
+                          >
+                            <div>
+                              <p className="text-xs font-black text-slate-800 dark:text-slate-100">Two-Step Verification</p>
+                              <p className="text-[10px] text-muted-foreground font-semibold mt-0.5">Require an extra password code on login</p>
+                            </div>
+                            <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${twoFactorEnabled ? "bg-primary" : "bg-muted-foreground/30"}`}>
+                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${twoFactorEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                            </div>
+                          </div>
                         </div>
 
                         {/* Session Metadata */}
@@ -645,13 +793,54 @@ const SettingsPage = () => {
                           <p className="text-[9px] text-muted-foreground leading-none">Usage represents local and cached travel logs.</p>
                         </div>
 
+                        {/* Auto-Download settings */}
+                        <div className="space-y-4">
+                          <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Automatic Media Download</h4>
+
+                          <div
+                            onClick={() => {
+                              const next = !autoDownloadWiFi;
+                              setAutoDownloadWiFi(next);
+                              localStorage.setItem("planzo_download_wifi", next ? "on" : "off");
+                              toast({ title: `Auto-download on Wi-Fi ${next ? 'enabled' : 'disabled'}` });
+                            }}
+                            className="flex justify-between items-center p-4 rounded-2xl bg-muted/15 border border-border/40 cursor-pointer hover:bg-muted/25 transition-all"
+                          >
+                            <div>
+                              <p className="text-xs font-black text-slate-800 dark:text-slate-100">When connected on Wi-Fi</p>
+                              <p className="text-[10px] text-muted-foreground font-semibold mt-0.5">Automatically load maps, photos, and media previews</p>
+                            </div>
+                            <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoDownloadWiFi ? "bg-primary" : "bg-muted-foreground/30"}`}>
+                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoDownloadWiFi ? "translate-x-6" : "translate-x-1"}`} />
+                            </div>
+                          </div>
+
+                          <div
+                            onClick={() => {
+                              const next = !autoDownloadCellular;
+                              setAutoDownloadCellular(next);
+                              localStorage.setItem("planzo_download_cellular", next ? "on" : "off");
+                              toast({ title: `Auto-download on Cellular ${next ? 'enabled' : 'disabled'}` });
+                            }}
+                            className="flex justify-between items-center p-4 rounded-2xl bg-muted/15 border border-border/40 cursor-pointer hover:bg-muted/25 transition-all"
+                          >
+                            <div>
+                              <p className="text-xs font-black text-slate-800 dark:text-slate-100">When using Mobile Data</p>
+                              <p className="text-[10px] text-muted-foreground font-semibold mt-0.5">Automatically load maps, photos, and media previews</p>
+                            </div>
+                            <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoDownloadCellular ? "bg-primary" : "bg-muted-foreground/30"}`}>
+                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoDownloadCellular ? "translate-x-6" : "translate-x-1"}`} />
+                            </div>
+                          </div>
+                        </div>
+
                         <div className="p-4 rounded-2xl bg-muted/20 border border-border/45 flex justify-between items-center">
                           <div>
                             <p className="text-xs font-black text-slate-800 dark:text-slate-100">Export Coordinates</p>
                             <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">Back up all saved itineraries and expense details into a JSON payload.</p>
                           </div>
-                          
-                          <button 
+
+                          <button
                             onClick={handleExportData}
                             disabled={isExporting}
                             className="py-3 px-5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-slate-100 dark:text-slate-900 text-[9px] font-black uppercase tracking-widest rounded-2xl flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
@@ -667,7 +856,7 @@ const SettingsPage = () => {
                       <div className="space-y-3">
                         {/* Data Collection Card */}
                         <div className="rounded-2xl border border-border/40 overflow-hidden bg-muted/10">
-                          <button 
+                          <button
                             onClick={() => togglePrivacy("collection")}
                             className="w-full flex items-center justify-between p-4 text-left font-bold text-xs hover:bg-muted/15 transition-all text-slate-850"
                           >
@@ -683,7 +872,7 @@ const SettingsPage = () => {
 
                         {/* Analytics Preferences Card */}
                         <div className="rounded-2xl border border-border/40 overflow-hidden bg-muted/10">
-                          <button 
+                          <button
                             onClick={() => togglePrivacy("analytics")}
                             className="w-full flex items-center justify-between p-4 text-left font-bold text-xs hover:bg-muted/15 transition-all text-slate-850"
                           >
@@ -699,7 +888,7 @@ const SettingsPage = () => {
 
                         {/* Privacy Explanation Card */}
                         <div className="rounded-2xl border border-border/40 overflow-hidden bg-muted/10">
-                          <button 
+                          <button
                             onClick={() => togglePrivacy("explanation")}
                             className="w-full flex items-center justify-between p-4 text-left font-bold text-xs hover:bg-muted/15 transition-all text-slate-850"
                           >
@@ -728,7 +917,7 @@ const SettingsPage = () => {
                           </div>
                         </div>
 
-                        <button 
+                        <button
                           onClick={() => setShowDeleteModal(true)}
                           className="w-full py-3.5 rounded-2xl bg-red-650 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest shadow-lg transition-all active:scale-98"
                         >
@@ -748,37 +937,37 @@ const SettingsPage = () => {
       {/* Safety Deletion Modal */}
       <AnimatePresence>
         {showDeleteModal && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-background/80 backdrop-blur-sm p-4"
           >
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }} 
-              animate={{ scale: 1, opacity: 1 }} 
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               className="w-full max-w-sm bg-card border border-destructive/20 rounded-[32px] overflow-hidden shadow-2xl relative"
             >
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-orange-500" />
               <div className="p-6 relative">
-                <button 
-                  onClick={() => { setShowDeleteModal(false); setDeleteInput(""); }} 
+                <button
+                  onClick={() => { setShowDeleteModal(false); setDeleteInput(""); }}
                   aria-label="Close modal"
                   className="absolute top-6 right-6 h-8 w-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-foreground hover:text-background transition-colors"
                 >
                   <X className="h-4 w-4" />
                 </button>
-                
+
                 <div className="h-12 w-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center mb-4">
                   <Trash className="h-5 w-5" />
                 </div>
-                
+
                 <h3 className="text-lg font-display font-black text-slate-800 dark:text-slate-100">Delete Account?</h3>
                 <p className="text-xs text-muted-foreground mb-6 leading-relaxed">
                   This action is irreversible. All your saved itineraries, shared cost sheets, and travel logs will be wiped permanently.
                 </p>
-                
+
                 <label className="text-[9px] font-black text-muted-foreground mb-2 block tracking-widest uppercase">Type "DELETE" to confirm</label>
                 <input
                   type="text"
@@ -787,7 +976,7 @@ const SettingsPage = () => {
                   placeholder="DELETE"
                   className="w-full px-4 py-3 rounded-2xl bg-muted/40 border border-destructive/20 focus:border-destructive outline-none text-center font-black tracking-widest text-destructive uppercase transition-all mb-4 text-xs"
                 />
-                
+
                 <button
                   onClick={handleDeleteAccount}
                   disabled={deleteInput !== "DELETE" || isDeleting}

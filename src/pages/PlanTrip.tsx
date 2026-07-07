@@ -13,6 +13,10 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import Chatbot from "@/components/Chatbot";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as ShadcnCalendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 // import PlanSkeleton from "@/pages/PlanSkeleton";
 import TripPDF from "@/components/TripPDF";
 import type { LocalTransportOption, TripActivity, TripDay, TripPlan, TravelOption } from "@/types/trip-plan";
@@ -221,6 +225,7 @@ const PlanTrip = () => {
   const [travelers, setTravelers] = useState(2);
   const [startDate, setStartDate] = useState("");
   const [vibe, setVibe] = useState("Standard");
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   // Destination autocomplete
   const [autocompleteIndex, setAutocompleteIndex] = useState<number | null>(null);
@@ -1239,7 +1244,7 @@ const PlanTrip = () => {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* ── HERO SECTION ── */}
-      <div className="relative w-full overflow-hidden" style={{ minHeight: "540px" }}>
+      <div className="relative w-full overflow-hidden transition-all duration-500" style={{ minHeight: plan ? "180px" : "280px" }}>
         {/* Gradient backdrop */}
         <div
           className="absolute inset-0"
@@ -1276,7 +1281,7 @@ const PlanTrip = () => {
         />
 
         {/* Hero content */}
-        <div className="relative z-10 mx-auto flex w-full max-w-4xl flex-col items-center justify-center px-6 pt-20 pb-20 text-center md:pb-24">
+        <div className="relative z-10 mx-auto flex w-full max-w-4xl flex-col items-center justify-center px-6 pt-12 pb-16 text-center md:pb-20">
           {/* Badge */}
           <motion.div
             initial={{ opacity: 0, y: -16 }}
@@ -1302,8 +1307,8 @@ const PlanTrip = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.12 }}
-            className="mt-10 font-display font-black leading-tight tracking-tighter"
-            style={{ fontSize: "clamp(2.8rem, 7vw, 4.8rem)", color: "#ffffff" }}
+            className="mt-6 font-display font-black leading-tight tracking-tighter"
+            style={{ fontSize: "clamp(2.2rem, 5vw, 3.8rem)", color: "#ffffff" }}
           >
             Your Next Adventure{" "}
             <span
@@ -1318,306 +1323,361 @@ const PlanTrip = () => {
           </motion.h1>
 
           {/* Tagline */}
-          <motion.p
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="mt-7 max-w-2xl text-sm md:text-lg opacity-85 leading-relaxed mx-auto"
-            style={{ color: "rgba(196,213,255,0.85)" }}
-          >
-            Craft a stunning, fully personalized itinerary — complete with budgets, logistics &amp; day-by-day activities in seconds.
-          </motion.p>
+          {!plan && (
+            <motion.p
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="mt-4 max-w-2xl text-xs md:text-base opacity-80 leading-relaxed mx-auto"
+              style={{ color: "rgba(196,213,255,0.85)" }}
+            >
+              Craft a stunning, fully personalized itinerary — complete with budgets, logistics &amp; day-by-day activities in seconds.
+            </motion.p>
+          )}
+        </div>
+      </div>
+
       {/* ── SEARCH CARD ── */}
       {!plan && (
-      <>
-      <div className="relative z-30 mt-8 w-full">
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35, type: "spring", damping: 20 }}
-          className="rounded-[30px] overflow-hidden shadow-[0_32px_68px_-26px_rgba(0,0,0,0.24)] border-t border-white/40"
-          style={{
-            background: "rgba(255, 255, 255, 0.9)",
-            backdropFilter: "blur(32px) saturate(180%)",
-            border: "1px solid rgba(255, 255, 255, 0.6)",
-            boxShadow: `inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 32px 64px -16px ${activeConfig.glow}`,
-          }}
-        >
-          {/* Card header – Mood chips */}
-          <div className="px-6 pt-7 pb-5 md:px-8 md:pt-8 md:pb-6 border-b" style={{ borderColor: "rgba(0,0,0,0.04)" }}>
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-5" style={{ color: activeConfig.color }}>
-              Personalize Your Journey
-            </p>
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1.5">
-              {moods.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setActiveMood(m.id)}
-                  className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-xs font-black transition-all duration-300 whitespace-nowrap ${
-                    activeMood === m.id
-                      ? `${activeConfig.bg} text-white shadow-md`
-                      : "bg-slate-100/60 text-slate-500 hover:bg-slate-200/60 hover:text-slate-700"
-                  }`}
-                  style={activeMood === m.id ? { boxShadow: `0 10px 18px -8px ${activeConfig.glow}` } : undefined}
-                >
-                  <m.icon className="h-4 w-4" />
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Card body */}
-          <div className="p-6 pt-6 md:p-8 md:pt-7">
-            {/* AI Input */}
-            <div className="flex items-start gap-4 md:gap-5">
-              <motion.div 
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                className="h-11 w-11 md:h-12 md:w-12 rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-600/20 ring-1 ring-white/20"
-              >
-                <Sparkles className="h-5 w-5 md:h-6 md:w-6 text-white" />
-              </motion.div>
-              <div className="flex-1 space-y-4">
-                <AnimatePresence mode="popLayout">
-                  {destinations.map((dest, index) => (
-                    <motion.div 
-                      key={index} 
-                      layout
-                      initial={{ opacity: 0, x: -10 }} 
-                      animate={{ opacity: 1, x: 0 }} 
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="relative group"
-                    >
-                      {index > 0 && (
-                        <div className="flex items-center gap-4 py-2 opacity-30">
-                          <div className="h-px flex-1 bg-slate-200" />
-                          <span className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: activeConfig.color }}>Next Stop</span>
-                          <div className="h-px flex-1 bg-slate-200" />
-                        </div>
-                      )}
-                      <div className="relative flex items-center gap-4">
-                        <div className="flex-1 relative">
-                          <input
-                            value={dest}
-                            onChange={(e) => handleDestinationChangeWithSuggest(index, e.target.value)}
-                            onKeyDown={handleDestinationKeyDown}
-                            onBlur={() => setTimeout(() => { setSuggestions([]); setAutocompleteIndex(null); }, 150)}
-                            placeholder={index === 0 ? 'Where to? (e.g. goa, hyderabad)' : 'Next destination...'}
-                            className="w-full bg-slate-100/40 rounded-2xl px-5 py-3.5 text-sm md:text-base text-slate-900 outline-none placeholder:text-slate-400 focus:ring-4 transition-all font-bold border border-slate-200/60 group-hover:bg-slate-100/80 group-focus-within:border-transparent group-focus-within:bg-white overflow-hidden shadow-inner"
-                            style={{ 
-                              '--tw-ring-color': activeConfig.glow,
-                            } as RingStyle}
-                            autoComplete="off"
-                          />
-                          {/* Autocomplete dropdown */}
-                          <AnimatePresence>
-                            {autocompleteIndex === index && suggestions.length > 0 && (
-                              <motion.div 
-                                initial={{ opacity: 0, y: 10 }} 
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 10 }}
-                                className="absolute left-0 right-0 top-full mt-2 z-50 bg-white/95 backdrop-blur-2xl border border-slate-200 rounded-[28px] shadow-2xl overflow-hidden py-3"
-                              >
-                                {suggestions.map((s, idx) => (
-                                  <motion.button
-                                    key={s}
-                                    initial={{ opacity: 0, x: -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: idx * 0.05 }}
-                                    onMouseDown={() => handleSuggestionClick(index, s)}
-                                    className="w-full text-left px-7 py-3.5 text-sm text-slate-700 hover:bg-slate-50 hover:pl-9 transition-all flex items-center gap-4 font-bold active:scale-[0.99]"
-                                  >
-                                    <MapPin className="h-4 w-4" style={{ color: activeConfig.color }} />
-                                    {s}
-                                  </motion.button>
-                                ))}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                        {destinations.length > 1 && (
-                          <button
-                            onClick={() => removeStop(index)}
-                            className="p-3.5 rounded-2xl text-slate-400 hover:text-rose-500 hover:bg-rose-50/50 transition-all active:scale-90"
-                            title="Remove stop"
-                          >
-                            <X className="h-6 w-6" />
-                          </button>
-                        )}
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+        <div className="relative z-30 -mt-10 max-w-5xl mx-auto px-4 w-full">
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25, type: "spring", damping: 20 }}
+            className="rounded-[30px] overflow-hidden shadow-[0_32px_68px_-26px_rgba(0,0,0,0.15)] border border-slate-200/60 bg-white/95 backdrop-blur-2xl"
+          >
+            <div className="p-6 md:p-8">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
                 
-                {destinations.length < 5 && (
-                  <button
-                    onClick={addStop}
-                    className="flex items-center gap-2 text-[11px] font-black hover:opacity-80 transition-all mt-2 uppercase tracking-widest pl-2"
-                    style={{ color: activeConfig.color }}
-                  >
-                    <Plus className="h-4 w-4" /> Add Destination
-                  </button>
-                )}
-              </div>
-            </div>
+                {/* LEFT COLUMN: Destinations */}
+                <div className="md:col-span-7 space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Route details</p>
+                      <h3 className="text-base font-black text-slate-800 dark:text-slate-100 mt-0.5">Destinations &amp; Stops</h3>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-600">
+                      {destinations.filter(d => d.trim()).length} Stop(s)
+                    </span>
+                  </div>
 
-            {/* Quick Options */}
-            <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                { label: "Budget (₹)", icon: IndianRupee, value: budget, onChange: setBudget, type: "number", min: 500 },
-                { label: "Days", icon: Calendar, value: days, onChange: (v: string) => setDays(Math.min(30, Math.max(1, parseInt(v) || 1))), type: "number", min: 1, max: 30 },
-                { label: "Travelers", icon: Users, value: travelers, onChange: (v: string) => setTravelers(Math.min(20, Math.max(1, parseInt(v) || 1))), type: "number", min: 1, max: 20 },
-              ].map((opt) => (
-                <div key={opt.label} className="rounded-2xl border border-slate-200/60 bg-white/50 p-3">
-                  <label className="mb-2 text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                    <opt.icon className="h-3 w-3" style={{ color: activeConfig.color }} /> {opt.label}
-                  </label>
-                  <input
-                    type={opt.type}
-                    value={opt.value}
-                    min={opt.min}
-                    max={opt.max}
-                    onChange={(e) => opt.onChange(e.target.value)}
-                    className="h-[52px] w-full rounded-xl border border-slate-200/70 bg-slate-100/60 px-4 text-sm text-slate-900 outline-none transition-all font-bold focus:bg-white focus:ring-4"
-                    style={{ '--tw-ring-color': activeConfig.glow } as RingStyle}
-                  />
+                  {/* Scrollable fixed-height list of inputs */}
+                  <div className={cn(
+                    "max-h-[260px] overflow-y-auto pr-2 space-y-3 scrollbar-thin transition-all duration-300",
+                    autocompleteIndex !== null && suggestions.length > 0 && "pb-36"
+                  )}>
+                    <AnimatePresence mode="popLayout">
+                      {destinations.map((dest, index) => (
+                        <motion.div 
+                          key={index} 
+                          layout
+                          initial={{ opacity: 0, y: 10 }} 
+                          animate={{ opacity: 1, y: 0 }} 
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          className="relative group"
+                        >
+                          {index > 0 && (
+                            <div className="flex items-center gap-3 py-1 opacity-40">
+                              <div className="h-px flex-1 bg-slate-200" />
+                              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400">Next Stop</span>
+                              <div className="h-px flex-1 bg-slate-200" />
+                            </div>
+                          )}
+                          <div className="relative flex items-center gap-3">
+                            <div className="flex-1 relative">
+                              <input
+                                value={dest}
+                                disabled={isPlanning}
+                                onChange={(e) => handleDestinationChangeWithSuggest(index, e.target.value)}
+                                onKeyDown={handleDestinationKeyDown}
+                                onBlur={() => setTimeout(() => { setSuggestions([]); setAutocompleteIndex(null); }, 200)}
+                                placeholder={index === 0 ? 'Where to? (e.g. Goa, Delhi)' : 'Add stop...'}
+                                className="w-full bg-slate-100/50 rounded-2xl px-5 py-3.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-4 transition-all font-bold border border-slate-200/50 focus:bg-white disabled:opacity-50"
+                                style={{ 
+                                  '--tw-ring-color': activeConfig.glow,
+                                } as RingStyle}
+                                autoComplete="off"
+                              />
+                              {/* Autocomplete dropdown */}
+                              <AnimatePresence>
+                                {autocompleteIndex === index && suggestions.length > 0 && (
+                                  <motion.div 
+                                    initial={{ opacity: 0, y: 10 }} 
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 10 }}
+                                    className="absolute left-0 right-0 top-full mt-2 z-50 bg-white/95 backdrop-blur-2xl border border-slate-200 rounded-2xl shadow-2xl overflow-hidden py-2"
+                                  >
+                                    {suggestions.map((s, idx) => (
+                                      <button
+                                        key={s}
+                                        type="button"
+                                        onMouseDown={() => handleSuggestionClick(index, s)}
+                                        className="w-full text-left px-5 py-3 text-xs text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-3 font-bold"
+                                      >
+                                        <MapPin className="h-3.5 w-3.5 text-indigo-500" />
+                                        {s}
+                                      </button>
+                                    ))}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                            {destinations.length > 1 && (
+                              <button
+                                type="button"
+                                disabled={isPlanning}
+                                onClick={() => removeStop(index)}
+                                className="p-3.5 rounded-2xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all disabled:opacity-50"
+                                title="Remove stop"
+                              >
+                                <X className="h-5 w-5" />
+                              </button>
+                            )}
+                          </div>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </div>
+
+                  {destinations.length < 5 && (
+                    <button
+                      type="button"
+                      disabled={isPlanning}
+                      onClick={addStop}
+                      className="flex items-center gap-2 text-[10px] font-black hover:opacity-80 transition-all mt-2 uppercase tracking-widest pl-1 disabled:opacity-50"
+                      style={{ color: activeConfig.color }}
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Add Destination
+                    </button>
+                  )}
                 </div>
-              ))}
-              
-              <div className="rounded-2xl border border-slate-200/60 bg-white/50 p-3">
-                <label className="mb-2 text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                  <CalendarPlus className="h-3 w-3" style={{ color: activeConfig.color }} /> Date
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  min={new Date().toISOString().split("T")[0]}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="h-[52px] w-full px-4 py-3 rounded-2xl bg-slate-100/40 text-sm text-slate-900 outline-none focus:ring-4 border border-slate-200/60 transition-all font-bold focus:bg-white"
-                  style={{ '--tw-ring-color': activeConfig.glow } as RingStyle}
-                />
+
+                {/* RIGHT COLUMN: Settings & Custom Date Calendar */}
+                <div className="md:col-span-5 space-y-6">
+                  {/* Mood/Vibe */}
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Travel style</p>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {moods.map((m) => {
+                        const Icon = m.icon;
+                        const isSelected = activeMood === m.id;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            disabled={isPlanning}
+                            onClick={() => setActiveMood(m.id)}
+                            className={cn(
+                              "flex flex-col items-center justify-center p-2.5 rounded-xl border border-slate-200/50 transition-all duration-300 gap-1 focus:outline-none disabled:opacity-50",
+                              isSelected
+                                ? "bg-white border-primary shadow-md ring-2 ring-primary/20 scale-103"
+                                : "bg-slate-100/50 hover:bg-slate-200/50 text-slate-500 hover:text-slate-700"
+                            )}
+                            style={isSelected ? { borderColor: activeConfig.color, '--tw-ring-color': activeConfig.glow } as RingStyle : undefined}
+                          >
+                            <Icon className="h-4.5 w-4.5" style={isSelected ? { color: activeConfig.color } : undefined} />
+                            <span className="text-[9px] font-black uppercase tracking-wider">{m.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Settings grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "Budget (₹)", icon: IndianRupee, value: budget, onChange: setBudget, type: "number", min: 500 },
+                      { label: "Days", icon: Calendar, value: days, onChange: (v: string) => setDays(Math.min(30, Math.max(1, parseInt(v) || 1))), type: "number", min: 1, max: 30 },
+                    ].map((opt) => (
+                      <div key={opt.label} className="rounded-2xl border border-slate-200/60 bg-white/50 p-3">
+                        <label className="mb-2 text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center gap-1.5">
+                          <opt.icon className="h-3.5 w-3.5" style={{ color: activeConfig.color }} /> {opt.label}
+                        </label>
+                        <input
+                          type={opt.type}
+                          disabled={isPlanning}
+                          value={opt.value}
+                          min={opt.min}
+                          max={opt.max}
+                          onChange={(e) => opt.onChange(e.target.value)}
+                          className="h-12 w-full rounded-xl border border-slate-200/50 bg-slate-100/50 px-3.5 text-xs text-slate-900 outline-none transition-all font-bold focus:bg-white focus:ring-4 disabled:opacity-50"
+                          style={{ '--tw-ring-color': activeConfig.glow } as RingStyle}
+                        />
+                      </div>
+                    ))}
+
+                    <div className="rounded-2xl border border-slate-200/60 bg-white/50 p-3">
+                      <label className="mb-2 text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center gap-1.5">
+                        <Users className="h-3.5 w-3.5" style={{ color: activeConfig.color }} /> Travelers
+                      </label>
+                      <input
+                        type="number"
+                        disabled={isPlanning}
+                        value={travelers}
+                        min={1}
+                        max={20}
+                        onChange={(e) => setTravelers(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
+                        className="h-12 w-full rounded-xl border border-slate-200/50 bg-slate-100/50 px-3.5 text-xs text-slate-900 outline-none transition-all font-bold focus:bg-white focus:ring-4 disabled:opacity-50"
+                        style={{ '--tw-ring-color': activeConfig.glow } as RingStyle}
+                      />
+                    </div>
+
+                    {/* Radix Popover Date Picker */}
+                    <div className="rounded-2xl border border-slate-200/60 bg-white/50 p-3 flex flex-col justify-between">
+                      <label className="mb-2 text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center gap-1.5">
+                        <CalendarPlus className="h-3.5 w-3.5" style={{ color: activeConfig.color }} /> Date
+                      </label>
+                      <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                        <PopoverTrigger asChild>
+                          <button
+                            disabled={isPlanning}
+                            onClick={() => setIsCalendarOpen(true)}
+                            className={cn(
+                              "h-12 w-full rounded-xl border border-slate-200/50 bg-slate-100/50 px-3.5 text-xs outline-none transition-all font-bold flex items-center justify-between text-left focus:bg-white focus:ring-4 hover:bg-slate-200/20 disabled:opacity-50",
+                              !startDate && "text-slate-400 font-medium"
+                            )}
+                            style={{ '--tw-ring-color': activeConfig.glow } as RingStyle}
+                          >
+                            <span>{startDate ? format(new Date(startDate), "MMM dd, yyyy") : "Select departure"}</span>
+                            <CalendarPlus className="h-3.5 w-3.5 text-slate-400" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0 rounded-2xl shadow-2xl border border-slate-200 bg-white" align="end">
+                          <ShadcnCalendar
+                            mode="single"
+                            selected={startDate ? new Date(startDate) : undefined}
+                            onSelect={(date) => {
+                              setStartDate(date ? date.toISOString().split("T")[0] : "");
+                              setIsCalendarOpen(false);
+                            }}
+                            disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                            initialFocus
+                            className="rounded-2xl"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+
+                  {/* Primary call to action */}
+                  <motion.button
+                    whileHover={{ scale: 1.01, boxShadow: `0 20px 40px -12px ${activeConfig.glow}` }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handlePlan}
+                    disabled={isPlanning || !destination.trim()}
+                    className={`w-full py-4 rounded-2xl ${activeConfig.bg} text-white font-black text-[10px] uppercase tracking-[0.24em] flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden`}
+                    style={{ boxShadow: `0 15px 35px -12px ${activeConfig.glow}` }}
+                  >
+                    {isPlanning && (
+                      <motion.div 
+                         initial={{ x: "-100%" }} 
+                         animate={{ x: "100%" }} 
+                         transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                         className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent"
+                      />
+                    )}
+                    {isPlanning ? (
+                      <><Loader2 className="h-5 w-5 animate-spin" /> Orchestrating...</>
+                    ) : (
+                      <><Sparkles className="h-5 w-5 group-hover:rotate-12 transition-transform" /> Create My Adventure</>
+                    )}
+                  </motion.button>
+                </div>
+
               </div>
             </div>
-
-            <motion.button
-              whileHover={{ scale: 1.01, boxShadow: `0 20px 40px -12px ${activeConfig.glow}` }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handlePlan}
-              disabled={isPlanning || !destination.trim()}
-              className={`w-full mt-8 py-4 rounded-2xl ${activeConfig.bg} text-white font-black text-[11px] uppercase tracking-[0.24em] flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden`}
-              style={{ boxShadow: `0 15px 35px -12px ${activeConfig.glow}` }}
-            >
-              {isPlanning && (
-                <motion.div 
-                   initial={{ x: "-100%" }} 
-                   animate={{ x: "100%" }} 
-                   transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                   className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                />
-              )}
-              {isPlanning ? (
-                <><Loader2 className="h-6 w-6 animate-spin" /> Orchestrating Itinerary...</>
-              ) : (
-                <><Sparkles className="h-6 w-6 group-hover:rotate-12 transition-transform" /> Create My Adventure</>
-              )}
-            </motion.button>
             
             {!user && (
-              <p className="text-center text-[10px] font-bold text-slate-400 mt-6 uppercase tracking-widest">
+              <p className="text-center text-[10px] font-bold text-slate-400 pb-6 uppercase tracking-widest bg-slate-50/50 border-t border-slate-100 pt-4">
                 <User className="h-3 w-3 inline-block mr-1 mb-0.5 opacity-50" />
-                <button onClick={() => navigate('/auth')} className="hover:underline transition-colors" style={{ color: activeConfig.color }}>Sign in</button> to preserve your global explorations
+                <button type="button" onClick={() => navigate('/auth')} className="hover:underline transition-colors font-black" style={{ color: activeConfig.color }}>Sign in</button> to preserve your global explorations
               </p>
             )}
-          </div>
-        </motion.div>
-      </div>
-
-        {/* Error State */}
-        <AnimatePresence>
-          {error && (
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="mt-8 p-6 rounded-[32px] bg-white border border-rose-100 shadow-xl flex items-start gap-4 mx-auto max-w-2xl">
-              <AlertCircle className="h-6 w-6 text-rose-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-black text-rose-600 uppercase tracking-widest leading-none mb-2">Systems Interrupted</p>
-                <p className="text-xs text-rose-500/80 font-medium leading-relaxed">{error}</p>
-                <button onClick={handlePlan} className="mt-4 text-[10px] font-black text-rose-600 uppercase tracking-widest bg-rose-50 px-4 py-2 rounded-xl hover:bg-rose-100 transition-all">Re-attempt Generation</button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Streaming indicator */}
-        <AnimatePresence>
-          {isPlanning && !plan && (
-            <motion.div
-              key="ai-overlay"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[9999] flex items-center justify-center"
-              style={{ background: "rgba(10, 8, 30, 0.92)", backdropFilter: "blur(24px)" }}
-            >
-              {/* Animated blobs */}
-              <motion.div
-                className="absolute top-1/4 left-1/4 rounded-full opacity-20 blur-3xl pointer-events-none"
-                style={{ width: 500, height: 500, background: "radial-gradient(circle, #6366f1 0%, transparent 70%)" }}
-                animate={{ scale: [1, 1.2, 1], x: [0, 30, 0], y: [0, -20, 0] }}
-                transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-              />
-              <motion.div
-                className="absolute bottom-1/4 right-1/4 rounded-full opacity-15 blur-3xl pointer-events-none"
-                style={{ width: 400, height: 400, background: "radial-gradient(circle, #06b6d4 0%, transparent 70%)" }}
-                animate={{ scale: [1, 1.15, 1], x: [0, -20, 0], y: [0, 20, 0] }}
-                transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-              />
-
-              <div className="relative z-10 flex flex-col items-center gap-8 px-6 text-center max-w-lg w-full">
-                {/* Spinning orb */}
-                <div className="relative">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                    className="h-24 w-24 rounded-full border-2 border-indigo-500/30"
-                    style={{ borderTopColor: "#6366f1" }}
-                  />
-                  <motion.div
-                    animate={{ rotate: -360 }}
-                    transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
-                    className="absolute inset-2 rounded-full border-2 border-cyan-500/20"
-                    style={{ borderBottomColor: "#06b6d4" }}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Sparkles className="h-10 w-10 text-indigo-400" />
-                  </div>
-                </div>
-
-                {/* Cycling captions */}
-                <AICaptionCycler
-                  destination={destination}
-                  stopCount={destinations.filter((d) => d.trim()).length}
-                  days={days}
-                />
-
-                {/* Progress bar */}
-                <div className="w-full max-w-xs">
-                  <div className="h-1 rounded-full bg-white/10 overflow-hidden">
-                    <motion.div
-                      animate={{ x: ["-100%", "100%"] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                      className="h-full w-1/2 rounded-full bg-gradient-to-r from-transparent via-indigo-400 to-transparent"
-                    />
-                  </div>
-                  <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] mt-4">Powered by Planzo AI</p>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </>
+          </motion.div>
+        </div>
       )}
-      </div>
-      </div>
 
+      {/* Error State */}
+      <AnimatePresence>
+        {error && !plan && (
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="mt-8 p-6 rounded-[32px] bg-white border border-rose-100 shadow-xl flex items-start gap-4 mx-auto max-w-2xl">
+            <AlertCircle className="h-6 w-6 text-rose-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-black text-rose-600 uppercase tracking-widest leading-none mb-2">Systems Interrupted</p>
+              <p className="text-xs text-rose-500/80 font-medium leading-relaxed">{error}</p>
+              <button type="button" onClick={handlePlan} className="mt-4 text-[10px] font-black text-rose-600 uppercase tracking-widest bg-rose-50 px-4 py-2 rounded-xl hover:bg-rose-100 transition-all">Re-attempt Generation</button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Streaming indicator */}
+      <AnimatePresence>
+        {isPlanning && !plan && (
+          <motion.div
+            key="ai-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center"
+            style={{ background: "rgba(10, 8, 30, 0.92)", backdropFilter: "blur(24px)" }}
+          >
+            {/* Animated blobs */}
+            <motion.div
+              className="absolute top-1/4 left-1/4 rounded-full opacity-20 blur-3xl pointer-events-none"
+              style={{ width: 500, height: 500, background: "radial-gradient(circle, #6366f1 0%, transparent 70%)" }}
+              animate={{ scale: [1, 1.2, 1], x: [0, 30, 0], y: [0, -20, 0] }}
+              transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <motion.div
+              className="absolute bottom-1/4 right-1/4 rounded-full opacity-15 blur-3xl pointer-events-none"
+              style={{ width: 400, height: 400, background: "radial-gradient(circle, #06b6d4 0%, transparent 70%)" }}
+              animate={{ scale: [1, 1.15, 1], x: [0, -20, 0], y: [0, 20, 0] }}
+              transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+            />
+
+            <div className="relative z-10 flex flex-col items-center gap-8 px-6 text-center max-w-lg w-full">
+              {/* Spinning orb */}
+              <div className="relative">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                  className="h-24 w-24 rounded-full border-2 border-indigo-500/30"
+                  style={{ borderTopColor: "#6366f1" }}
+                />
+                <motion.div
+                  animate={{ rotate: -360 }}
+                  transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+                  className="absolute inset-2 rounded-full border-2 border-cyan-500/20"
+                  style={{ borderBottomColor: "#06b6d4" }}
+                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Sparkles className="h-10 w-10 text-indigo-400" />
+                </div>
+              </div>
+
+              {/* Cycling captions */}
+              <AICaptionCycler
+                destination={destination}
+                stopCount={destinations.filter((d) => d.trim()).length}
+                days={days}
+              />
+
+              {/* Progress bar */}
+              <div className="w-full max-w-xs">
+                <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                  <motion.div
+                    animate={{ x: ["-100%", "100%"] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                    className="h-full w-1/2 rounded-full bg-gradient-to-r from-transparent via-indigo-400 to-transparent"
+                  />
+                </div>
+                <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] mt-4">Powered by Planzo AI</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Generated Plan */}
       <AnimatePresence>
         {plan && (

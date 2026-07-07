@@ -26,7 +26,7 @@ interface AIDestination {
   name: string;
   state?: string;
   rating: number;
-  tag: string;
+  tag?: string;
   price: string;
   days: string;
   category: string;
