@@ -215,6 +215,7 @@ const SettingsPage = () => {
     if (!user) return;
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any).rpc("delete_user_account");
       if (error) throw error;
     } catch (err) {
@@ -494,7 +495,7 @@ const SettingsPage = () => {
                             return (
                               <button
                                 key={opt.id}
-                                onClick={() => changeTheme(opt.id as any)}
+                                onClick={() => changeTheme(opt.id as "light" | "dark" | "system")}
                                 className={`rounded-2xl border p-2 text-left flex flex-col justify-between h-36 transition-all group overflow-hidden ${isSelected ? "border-primary ring-2 ring-primary/20 scale-103" : "border-border/60 hover:border-primary/40"
                                   }`}
                               >

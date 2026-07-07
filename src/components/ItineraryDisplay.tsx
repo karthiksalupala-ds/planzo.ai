@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Clock, MapPin, Utensils, Mountain, ShoppingBag, Camera, Navigation2,
   RefreshCw, Loader2, CloudSun, ExternalLink, ImageOff, Lock, Unlock,
@@ -229,15 +229,19 @@ const ItineraryDisplay = ({
         </div>
       </div>
 
-      {plan.itinerary.map((day: TripDay, i: number) => (
-        <motion.div
-          key={day.day}
-          className="day-container overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
-          data-day-index={i}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 + i * 0.08 }}
-        >
+      <AnimatePresence mode="wait">
+        {plan.itinerary.map((day: TripDay, i: number) => {
+          if (i !== selectedDay) return null;
+          return (
+            <motion.div
+              key={day.day}
+              className="day-container overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+              data-day-index={i}
+              initial={{ opacity: 0, x: 15 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -15 }}
+              transition={{ duration: 0.22, ease: "easeInOut" }}
+            >
           <div className="relative aspect-[16/6] min-h-[170px] overflow-hidden bg-muted/30">
             {day.heroImage && !imageErrors[`day-${day.day}`] ? (
               <img
@@ -521,8 +525,10 @@ const ItineraryDisplay = ({
               </div>
             )}
           </div>
-        </motion.div>
-      ))}
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 };

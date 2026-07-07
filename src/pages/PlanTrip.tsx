@@ -467,7 +467,7 @@ const PlanTrip = () => {
       });
 
       const context = (error as { context?: Response } | null)?.context;
-      let status = context?.status ?? null;
+      const status = context?.status ?? null;
       let message = error?.message ?? null;
 
       if (context) {
@@ -1908,18 +1908,15 @@ const PlanTrip = () => {
 
                   case 'map':
                     {
-                      const fallbackEmbed =
-                        plan.map?.embedUrl ||
-                        `https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(plan.destination || destination)}&zoom=11`;
                       const hasMapCoords = typeof plan?.map?.lat === "number" && typeof plan?.map?.lng === "number";
-                      const osmEmbed = hasMapCoords
-                        ? `https://www.openstreetmap.org/export/embed.html?bbox=${(plan.map!.lng as number) - 0.06}%2C${(plan.map!.lat as number) - 0.04}%2C${(plan.map!.lng as number) + 0.06}%2C${(plan.map!.lat as number) + 0.04}&layer=mapnik&marker=${plan.map!.lat}%2C${plan.map!.lng}`
-                        : `https://www.openstreetmap.org/export/embed.html?bbox=72.7%2C15.2%2C74.5%2C16.4&layer=mapnik&marker=15.5%2C73.8`;
+                      const googleEmbed = hasMapCoords
+                        ? `https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${plan.map!.lat},${plan.map!.lng}&zoom=13`
+                        : (plan.map?.embedUrl || `https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(plan.destination || destination)}&zoom=11`);
                     return (
                       <div className="bg-card rounded-3xl border border-border/50 shadow-elevated overflow-hidden h-[600px] relative">
                         <iframe
                           title={`Map preview for ${plan.destination || destination}`}
-                          src={hasMapCoords ? osmEmbed : fallbackEmbed}
+                          src={googleEmbed}
                           className="h-full w-full"
                           style={{ border: 0 }}
                           loading="lazy"
